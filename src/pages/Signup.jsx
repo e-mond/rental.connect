@@ -150,6 +150,22 @@ const Signup = () => {
               "Sign Up"
             )}
           </button>
+
+          <div>
+            <button className="w-full flex items-center justify-center gap-2 border border-gray-400 py-3 rounded-md font-semibold hover:bg-gray-100 transition">
+              <FaGoogle className="text-red-500" /> Sign in with Google
+            </button>
+
+            <p className="text-sm text-gray-600 text-center">
+              Don’t have an account?{" "}
+              <Link
+                to="/signup"
+                className="text-blue-500 font-medium hover:underline"
+              >
+                Sign Up
+              </Link>
+            </p>
+          </div>
         </form>
       </div>
     </div>

@@ -25,7 +25,7 @@ const LandlordLogin = () => {
           <h2 className="text-4xl font-bold drop-shadow-lg">
             Welcome Back, Landlord
           </h2>
-          <p className="mt-2 text-lg max-w-md font-medium drop-shadow-sm">
+          <p className="mt-2 text-lg max-w-md font-light drop-shadow-sm">
             Manage your properties effortlessly. Secure, simple, and efficient.
           </p>
         </div>

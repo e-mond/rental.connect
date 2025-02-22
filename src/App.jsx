@@ -11,7 +11,7 @@ import Signup from "./pages/Signup";
 import TenantAccountSuccess from "./pages/TenantAccountSuccess";
 import LandlordAccountSuccess from "./pages/LandlordAccountSuccess";
 import Dashboard from "./pages/Dashboard";
-import TenantDashboard from "./dashboards/tenatntdashboard/TenantDashboard";
+import TenantDashboard from "./dashboards/tenantdashboard/TenantDashboard";
 import NotFound from "./pages/NotFound";
 import "./index.css";
 

@@ -24,7 +24,7 @@ const TenantLogin = () => {
         />
         <div className="absolute inset-0 bg-gradient-to-b from-black/40 to-black/10 flex flex-col items-center justify-center text-white text-center p-8">
           <h2 className="text-4xl font-bold drop-shadow-lg">Welcome Home</h2>
-          <p className="mt-2 text-lg max-w-md font-medium drop-shadow-sm">
+          <p className="mt-2 text-lg max-w-md font-light drop-shadow-sm">
             Secure, simple, and seamless renting. Log in and take control.
           </p>
         </div>
