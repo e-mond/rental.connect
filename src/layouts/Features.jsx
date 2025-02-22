@@ -65,7 +65,7 @@ const Features = () => {
             <a
               href="#"
               onClick={feature.action} // Attach action handler
-              className="font-semibold text-blue-600 hover:text-black transition duration-300"
+              className="font-semibold text-black hover:text-blue-400 transition duration-300"
             >
               {feature.link} &rarr;
             </a>

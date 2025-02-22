@@ -92,7 +92,7 @@ const RentalTerms = () => {
         {rentalOptions.map((feature, index) => (
           <div
             key={index}
-            className="text-center p-6 border rounded-lg shadow-md bg-gray-100"
+            className="text-center p-6 border rounded-lg shadow-md bg-bl-100"
           >
             <img
               src={feature.image}
@@ -102,7 +102,7 @@ const RentalTerms = () => {
             <h3 className="text-lg font-semibold">{feature.title}</h3>
             <p className="text-gray-600 mt-2 mb-4">{feature.description}</p>
             <button
-              className="font-semibold text-blue-500 hover:underline"
+              className="font-semibold text-black hover:text-blue-400 transition duration-300"
               onClick={() => alert(`${feature.link} clicked!`)}
             >
               {feature.link} &rarr;

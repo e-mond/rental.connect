@@ -141,7 +141,7 @@ const Signup = () => {
           )}
 
           <button
-            className="w-full bg-black text-white py-3 mt-4 rounded-md font-bold text-md hover:bg-gray-800 flex items-center justify-center"
+            className="w-full bg-black text-white py-3 mt-4 mb-4 rounded-md font-bold text-md hover:bg-gray-800 flex items-center justify-center"
             disabled={loading}
           >
             {loading ? (
@@ -151,21 +151,21 @@ const Signup = () => {
             )}
           </button>
 
-          <div>
+          <div className="mb-4">
             <button className="w-full flex items-center justify-center gap-2 border border-gray-400 py-3 rounded-md font-semibold hover:bg-gray-100 transition">
               <FaGoogle className="text-red-500" /> Sign in with Google
             </button>
-
-            <p className="text-sm text-gray-600 text-center">
-              Don’t have an account?{" "}
-              <Link
-                to="/signup"
-                className="text-blue-500 font-medium hover:underline"
-              >
-                Sign Up
-              </Link>
-            </p>
           </div>
+
+          <p className="text-sm text-gray-600 text-center">
+            Already have an account?{" "}
+            <Link
+              to="/landlord-login"
+              className="text-blue-500 font-medium hover:underline"
+            >
+             Log In
+            </Link>
+          </p>
         </form>
       </div>
     </div>
