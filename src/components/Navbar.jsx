@@ -35,6 +35,14 @@ const Navbar = () => {
     "/account-success/landlord",
     "/account-success/tenant",
     "/tenant-dashboard",
+    "/tenants",
+    "/properties",
+    "/reviews",
+    "/maintenance",
+    "/messages",
+    "/payments",
+    "/documents",
+    "/settings",
   ];
 
   const shouldShowLogout = showLogoutRoutes.includes(location.pathname);
