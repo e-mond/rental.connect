@@ -1,118 +1,142 @@
 import { useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 import {
-  FaHome,
-  FaBuilding,
-  FaUsers,
-  FaStar,
-  FaWrench,
-  FaEnvelope,
-  FaDollarSign,
-  FaFileAlt,
-  FaCog,
-  FaUser,
-  FaBars,
-  FaTimes,
-} from "react-icons/fa";
+  HomeIcon,
+  BuildingOfficeIcon,
+  UsersIcon,
+  StarIcon,
+  WrenchIcon,
+  EnvelopeIcon,
+  CreditCardIcon,
+  DocumentTextIcon,
+  CogIcon,
+  Bars3Icon,
+  XMarkIcon,
+} from "@heroicons/react/24/outline";
 
 const Sidebar = () => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
+  const location = useLocation();
+
+  const toggleSidebar = () => setIsOpen(!isOpen);
+
+  const menuItems = [
+    {
+      name: "Dashboard",
+      path: "/dashboard",
+      icon: HomeIcon,
+    },
+    {
+      name: "Properties",
+      path: "/dashboard/properties",
+      icon: BuildingOfficeIcon,
+    },
+    { name: "Tenants", path: "/dashboard/tenants", icon: UsersIcon },
+    { name: "Reviews", path: "/dashboard/reviews", icon: StarIcon },
+    {
+      name: "Maintenance",
+      path: "/dashboard/maintenance",
+      icon: WrenchIcon,
+    },
+    {
+      name: "Messages",
+      path: "/dashboard/messages",
+      icon: EnvelopeIcon,
+    },
+  ];
+
+  const managementItems = [
+    {
+      name: "Payments",
+      path: "/dashboard/payments",
+      icon: CreditCardIcon,
+    },
+    {
+      name: "Documents",
+      path: "/dashboard/documents",
+      icon: DocumentTextIcon,
+    },
+    { name: "Settings", path: "/dashboard/settings", icon: CogIcon },
+  ];
+
+  const user = {
+    name: "Johnny Quayson",
+    accountType: "Landlord",
+    profilePic: "https://via.placeholder.com/40",
+  };
 
   return (
-    <>
-      {/* Mobile Toggle Button */}
-      <button
-        className="md:hidden p-4 text-gray-700 focus:outline-none"
-        onClick={() => setIsOpen(!isOpen)}
-      >
-        {isOpen ? (
-          <FaTimes className="w-6 h-6" />
-        ) : (
-          <FaBars className="w-6 h-6" />
-        )}
-      </button>
+    <div
+      className={`bg-white h-full shadow-md flex flex-col justify-between transition-all duration-300 ${
+        isOpen ? "w-64" : "w-20"
+      }`}
+    >
+      {/* Sidebar Header */}
+      <div className="flex items-center justify-between p-4">
+        <button
+          onClick={toggleSidebar}
+          className="text-gray-500 focus:outline-none"
+        >
+          {isOpen ? (
+            <XMarkIcon className="w-6 h-6" />
+          ) : (
+            <Bars3Icon className="w-6 h-6" />
+          )}
+        </button>
+      </div>
 
-      {/* Sidebar */}
-      <aside
-        className={`fixed inset-y-0 left-0 bg-gray-100 p-4 flex flex-col h-screen transform transition-transform md:relative md:translate-x-0 ${
-          isOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
-        <nav className="space-y-4 flex-grow">
-          <a
-            href="/dashboard"
-            className="flex items-center text-gray-700 hover:text-black"
-          >
-            <FaHome className="mr-2" /> Dashboard
-          </a>
-          <a
-            href="/properties"
-            className="flex items-center text-gray-700 hover:text-black"
-          >
-            <FaBuilding className="mr-2" /> Properties
-          </a>
-          <a
-            href="/tenants"
-            className="flex items-center text-gray-700 hover:text-black"
-          >
-            <FaUsers className="mr-2" /> Tenants
-          </a>
-          <a
-            href="/reviews"
-            className="flex items-center text-gray-700 hover:text-black"
-          >
-            <FaStar className="mr-2" /> Reviews
-          </a>
-          <a
-            href="/maintenance"
-            className="flex items-center text-gray-700 hover:text-black"
-          >
-            <FaWrench className="mr-2" /> Maintenance
-          </a>
-          <a
-            href="/messages"
-            className="flex items-center text-gray-700 hover:text-black"
-          >
-            <FaEnvelope className="mr-2" /> Messages
-          </a>
+      {/* Sidebar Navigation */}
+      <nav className="mt-5 flex-1">
+        <ul>
+          {menuItems.map(({ name, path, icon: Icon }) => (
+            <li
+              key={name}
+              className={`p-3 rounded-lg ${
+                location.pathname === path ? "bg-gray-200" : "hover:bg-gray-100"
+              }`}
+            >
+              <Link to={path} className="flex items-center space-x-3">
+                <Icon className="w-6 h-6 text-gray-700" />
+                {isOpen && <span>{name}</span>}
+              </Link>
+            </li>
+          ))}
+        </ul>
 
-          <div className="mt-8">
-            <h2 className="text-gray-600 text-sm uppercase">Management</h2>
-            <a
-              href="/payments"
-              className="flex items-center text-gray-700 hover:text-black mt-2"
+        <hr className="my-4 border-gray-300" />
+
+        <ul>
+          {managementItems.map(({ name, path, icon: Icon }) => (
+            <li
+              key={name}
+              className={`p-3 rounded-lg ${
+                location.pathname === path ? "bg-gray-200" : "hover:bg-gray-100"
+              }`}
             >
-              <FaDollarSign className="mr-2" /> Payments
-            </a>
-            <a
-              href="/documents"
-              className="flex items-center text-gray-700 hover:text-black mt-2"
-            >
-              <FaFileAlt className="mr-2" /> Documents
-            </a>
-            <a
-              href="/settings"
-              className="flex items-center text-gray-700 hover:text-black mt-2"
-            >
-              <FaCog className="mr-2" /> Settings
-            </a>
+              <Link to={path} className="flex items-center space-x-3">
+                <Icon className="w-6 h-6 text-gray-700" />
+                {isOpen && <span>{name}</span>}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </nav>
+
+      {/* User Profile Section */}
+      <div className="p-4 flex items-center space-x-3 border-t border-gray-300">
+        <img
+          src={user.profilePic}
+          alt="Profile"
+          className="w-10 h-10 rounded-full"
+        />
+        {isOpen && (
+          <div>
+            <p className="text-gray-800 font-semibold">{user.name}</p>
+            <p className="text-gray-500 text-sm">{user.accountType}</p>
           </div>
-        </nav>
-
-        {/* User Profile at Bottom */}
-        <div className="mt-auto flex items-center text-gray-700 p-4 bg-gray-200 rounded-lg">
-          <FaUser className="mr-2" />
-          <span>Johnny Quayson</span>
-        </div>
-      </aside>
-
-      {/* Background overlay for mobile */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 bg-black opacity-50 md:hidden"
-          onClick={() => setIsOpen(false)}
-        ></div>
-      )}
-    </>
+        )}
+      </div>
+    </div>
   );
 };
 

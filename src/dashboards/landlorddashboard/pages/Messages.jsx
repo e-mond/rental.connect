@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Search, MoreVertical, Clock, Check, Bell } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import Sidebar from "../components/Sidebar";
+
 
 const messagesData = [
   {
@@ -55,7 +55,7 @@ const Messages = () => {
 
   return (
     <div className="flex flex-col lg:flex-row">
-      <Sidebar />
+ 
       <div className="p-6 flex-1 bg-gray-50">
         {/* Header */}
         <div className="flex justify-between items-center mb-6">

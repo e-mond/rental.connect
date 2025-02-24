@@ -9,7 +9,7 @@ import {
   FaTrash,
 } from "react-icons/fa";
 import { MdGavel, MdDescription } from "react-icons/md";
-import Sidebar from "../../components/Sidebar";
+
 
 const mockDocuments = [
   {
@@ -75,8 +75,13 @@ export default function Documents() {
 
   return (
     <div className="flex flex-col md:flex-row">
-      <Sidebar />
+   
       <div className="p-6 space-y-6 flex-1 w-full">
+        {/* Breadcrumb Navigation */}
+        <nav className="text-gray-500 mb-4">
+          <span className="text-black font-semibold">Dashboard</span> &gt;
+          Documents
+        </nav>
         {/* Header Section */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-4">
           <h2 className="text-2xl font-semibold">Documents</h2>

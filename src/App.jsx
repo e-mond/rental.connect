@@ -1,4 +1,5 @@
-import { Routes, Route, useLocation } from "react-router-dom";
+import { Routes, Route, useLocation, Navigate } from "react-router-dom";
+
 import { useState, useEffect } from "react";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
@@ -10,44 +11,43 @@ import LandlordLogin from "./pages/LandlordLogin";
 import Signup from "./pages/Signup";
 import TenantAccountSuccess from "./pages/TenantAccountSuccess";
 import LandlordAccountSuccess from "./pages/LandlordAccountSuccess";
-import LandlordDashboard from "./dashboards/landlorddashboard/LandlordDashboard";
-import TenantDashboard from "./dashboards/tenantdashboard/TenantDashboard";
 import NotFound from "./pages/NotFound";
-import "./index.css";
-import Properties from "../src/dashboards/landlorddashboard/pages/Properties";
-import Tenant from "../src/dashboards/landlorddashboard/pages//Tenants";
+
+// Tenant Dashboard Components
+import TenantDashboard from "./dashboards/tenantdashboard/TenantDashboard";
+import TenantDashboardHome from "./dashboards/tenantdashboard/pages/DashboardHome";
+import TenantSearch from "./dashboards/tenantdashboard/pages/Search";
+import PropertyDetails from "./dashboards/tenantdashboard/pages/PropertyDetails";
+import TenantApplications from "./dashboards/tenantdashboard/pages/Applications";
+import TenantMessages from "./dashboards/tenantdashboard/pages/Messages";
+import TenantPayments from "./dashboards/tenantdashboard/pages/Payments";
+import Profile from "./dashboards/tenantdashboard/pages/Profile";
+import TenantSettings from "./dashboards/tenantdashboard/pages/Settings";
+
+// Landlord Dashboard Components
+import LandlordDashboard from "./dashboards/landlorddashboard/LandlordDashboard";
+import Properties from "./dashboards/landlorddashboard/pages/Properties";
+import Tenants from "./dashboards/landlorddashboard/pages/Tenants";
 import Reviews from "./dashboards/landlorddashboard/pages/Reviews";
-import Maintenance from "../src/dashboards/landlorddashboard/pages/Maintenance";
-import Messages from "../src/dashboards/landlorddashboard/pages/Messages";
-import Payments from "../src/dashboards/landlorddashboard/pages/management/Payments";
-import Documents from "../src/dashboards/landlorddashboard/pages/management/Documents";
-import Settings from "../src/dashboards/landlorddashboard/pages/management/Settings";
-import Profile from "../src/dashboards/landlorddashboard/pages/Profile";
+import Maintenance from "./dashboards/landlorddashboard/pages/Maintenance";
+import LandlordMessages from "./dashboards/landlorddashboard/pages/Messages";
+import LandlordPayments from "./dashboards/landlorddashboard/pages/management/Payments";
+import Documents from "./dashboards/landlorddashboard/pages/management/Documents";
+import LandlordSettings from "./dashboards/landlorddashboard/pages/management/Settings";
+import LandlordProfile from "./dashboards/landlorddashboard/pages/Profile";
+
+import "./index.css";
 
 function App() {
   const location = useLocation();
   const [loading, setLoading] = useState(false);
 
-  // Hide footer on certain routes
-  const hideFooterRoutes = [
-    "/dashboard",
-    "/account-success/landlord",
-    "/account-success",
-    "/tenant-dashboard",
-    "/properties",
-    "/tenants",
-    "/properties",
-    "/reviews",
-    "/maintenance",
-    "/messages",
-    "/payments",
-    "/documents",
-    "/settings",
-  ];
+  // Routes that should hide the footer
+  const dashboardRoutes = ["/tenant-dashboard", "/dashboard"];
   const shouldHideFooter =
-    hideFooterRoutes.includes(location.pathname) ||
-    location.pathname.startsWith("/dashboard/") ||
-    location.pathname.startsWith("/tenant-dashboard/");
+    dashboardRoutes.includes(location.pathname) ||
+    location.pathname.startsWith("/tenant-dashboard/") ||
+    location.pathname.startsWith("/dashboard/");
 
   useEffect(() => {
     // Show loading when navigating
@@ -88,23 +88,38 @@ function App() {
             element={<LandlordAccountSuccess />}
           />
 
-          {/* Dashboard Routes */}
-          <Route path="/dashboard/*" element={<LandlordDashboard />} />
-          <Route path="/tenant-dashboard/*" element={<TenantDashboard />} />
+          {/* Tenant Dashboard Routes */}
+          <Route path="/tenant-dashboard/*" element={<TenantDashboard />}>
+            <Route index element={<Navigate to="dashboard" />} />
+            <Route path="dashboard" element={<TenantDashboardHome />} />
+            <Route path="search" element={<TenantSearch />} />
+            <Route path="property/:id" element={<PropertyDetails />} />
+            <Route path="applications" element={<TenantApplications />} />
+            <Route path="messages" element={<TenantMessages />} />
+            <Route path="payments" element={<TenantPayments />} />
+            <Route path="profile" element={<Profile />} />
+            <Route path="settings" element={<TenantSettings />} />
+          </Route>
+
+          {/* Direct Tenant Search Route */}
+          <Route path="/tenant/search" element={<TenantSearch />} />
+
+          {/* Landlord Dashboard Routes */}
+          <Route path="/dashboard/*" element={<LandlordDashboard />}>
+            <Route index element={<Navigate to="properties" />} />
+            <Route path="properties" element={<Properties />} />
+            <Route path="tenants" element={<Tenants />} />
+            <Route path="reviews" element={<Reviews />} />
+            <Route path="maintenance" element={<Maintenance />} />
+            <Route path="messages" element={<LandlordMessages />} />
+            <Route path="payments" element={<LandlordPayments />} />
+            <Route path="documents" element={<Documents />} />
+            <Route path="settings" element={<LandlordSettings />} />
+            <Route path="profile" element={<LandlordProfile />} />
+          </Route>
 
           {/* 404 Not Found */}
           <Route path="*" element={<NotFound />} />
-
-          {/* LandLord Dashboard */}
-          <Route path="properties" element={<Properties />} />
-          <Route path="tenants" element={<Tenant />} />
-          <Route path="reviews" element={<Reviews />} />
-          <Route path="maintenance" element={<Maintenance />} />
-          <Route path="messages" element={<Messages />} />
-          <Route path="payments" element={<Payments />} />
-          <Route path="documents" element={<Documents />} />
-          <Route path="settings" element={<Settings />} />
-          <Route path="profile" element={<Profile />} />
         </Routes>
       </main>
 

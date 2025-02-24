@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { FaSearch, FaPlus, FaEdit, FaEllipsisV } from "react-icons/fa";
-import Sidebar from "../../components/Sidebar";
+
 
 // Mock data for payments
 const mockPayments = [
@@ -62,8 +62,13 @@ const Payments = () => {
 
   return (
     <div className="flex">
-      <Sidebar />
+   
       <div className="p-6 w-full">
+        {/* Breadcrumb Navigation */}
+        <nav className="text-gray-500 mb-4">
+          <span className="text-black font-semibold">Dashboard</span> &gt;
+          Payments
+        </nav>
         {/* Header Section */}
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold">Payments</h2>

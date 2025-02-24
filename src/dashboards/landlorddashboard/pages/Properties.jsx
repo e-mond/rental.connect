@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { FaEdit, FaEllipsisV, FaSearch, FaPlus } from "react-icons/fa";
-import Sidebar from "../components/Sidebar";
+
 
 const properties = [
   {
@@ -49,7 +49,7 @@ const Properties = () => {
 
   return (
     <div className="flex flex-col md:flex-row">
-      <Sidebar />
+ 
       <div className="p-4 w-full">
         {/* Header Section */}
         <div className="flex justify-between items-center mb-4">

@@ -5,12 +5,14 @@ import RecentActivity from "./components/RecentActivity";
 import LeaseRenewals from "./components/LeaseRenewals";
 import Properties from "./pages/Properties";
 import Reviews from "./pages/Reviews";
+import Tenants from "./pages/Tenants";
 import Maintenance from "./pages/Maintenance";
 import Messages from "./pages/Messages";
 import Payments from "./pages/management/Payments";
 import Documents from "./pages/management/Documents";
 import Settings from "./pages/management/Settings";
 import Profile from "./pages/Profile";
+
 
 const LandlordDashboard = () => {
   return (
@@ -31,6 +33,7 @@ const LandlordDashboard = () => {
           />
           <Route path="properties" element={<Properties />} />
           <Route path="reviews" element={<Reviews />} />
+          <Route path="tenants" element={<Tenants />} />
           <Route path="maintenance" element={<Maintenance />} />
           <Route path="messages" element={<Messages />} />
           <Route path="payments" element={<Payments />} />

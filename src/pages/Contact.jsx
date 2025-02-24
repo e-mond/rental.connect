@@ -1,4 +1,3 @@
-
 import {
   ChatBubbleLeftIcon,
   PhoneIcon,
@@ -6,12 +5,25 @@ import {
 } from "@heroicons/react/24/outline";
 
 const Contact = () => {
+  const handleChat = () => {
+    alert("Starting chat support...");
+    // Replace with actual chat support logic
+  };
+
+  const handleEmail = () => {
+    window.location.href = "mailto:support@example.com";
+  };
+
+  const handleCall = () => {
+    window.location.href = "tel:+1234567890";
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4 sm:px-8">
       {/* Hero Section */}
       <div className="relative bg-black text-white h-64 py-20 px-4 text-center mb-10">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-4xl font-extrabold mb-4">We're Here to Help</h1>
+          <h1 className="text-4xl font-extrabold mb-4">We&apos;re Here to Help</h1>
           <p className="text-lg text-gray-200">
             Choose the best way to reach out to us. Our team is ready to assist
             you.
@@ -26,7 +38,10 @@ const Contact = () => {
           <ChatBubbleLeftIcon className="w-12 h-12 text-black mx-auto mb-4" />
           <h2 className="text-xl font-semibold">Live Chat</h2>
           <p className="mb-4">Chat with our support team in real time.</p>
-          <button className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition">
+          <button
+            onClick={handleChat}
+            className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition"
+          >
             Start Chat
           </button>
         </div>
@@ -36,7 +51,10 @@ const Contact = () => {
           <EnvelopeIcon className="w-12 h-12 text-black mx-auto mb-4" />
           <h2 className="text-xl font-semibold">Email Support</h2>
           <p className="mb-4">Send us a detailed message.</p>
-          <button className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition">
+          <button
+            onClick={handleEmail}
+            className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition"
+          >
             Send Email
           </button>
         </div>
@@ -46,7 +64,10 @@ const Contact = () => {
           <PhoneIcon className="w-12 h-12 text-black mx-auto mb-4" />
           <h2 className="text-xl font-semibold">Phone Support</h2>
           <p className="mb-4">Talk to us directly.</p>
-          <button className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition">
+          <button
+            onClick={handleCall}
+            className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition"
+          >
             Call Now
           </button>
         </div>
@@ -61,7 +82,7 @@ const Contact = () => {
           <div className="bg-gray-100 p-4 rounded-lg shadow hover:shadow-lg transition">
             <h3 className="font-semibold">How do I reset my password?</h3>
             <p className="text-sm mt-2">
-              You can reset your password by clicking on the "Forgot Password"
+              You can reset your password by clicking on the &quot;Forgot Password&quot;
               link on the login page. An email will be sent to your registered
               address with instructions.
             </p>
@@ -71,8 +92,8 @@ const Contact = () => {
               Can I update my account information?
             </h3>
             <p className="text-sm mt-2">
-              Yes, you can update your account information in the "Account
-              Settings" section after logging in.
+              Yes, you can update your account information in the &quot;Account
+              Settings&quot; section after logging in.
             </p>
           </div>
           <div className="bg-gray-100 p-4 rounded-lg shadow hover:shadow-lg transition">

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Search, RefreshCcw, MoreVertical } from "lucide-react";
 import Button from "../../../components/Button";
-import Sidebar from "../components/Sidebar";
+
 
 const reviewsData = [
   {
@@ -52,7 +52,7 @@ const Reviews = () => {
 
   return (
     <div className="flex flex-col md:flex-row">
-      <Sidebar />
+   
       <div className="p-6 bg-gray-50 flex-1">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold">Reviews</h2>

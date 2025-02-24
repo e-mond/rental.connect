@@ -6,7 +6,7 @@ import {
   Clock,
   CheckCircle,
 } from "lucide-react";
-import Sidebar from "../components/Sidebar";
+
 
 const Maintenance = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -63,7 +63,7 @@ const Maintenance = () => {
 
   return (
     <div className="flex flex-col lg:flex-row">
-      <Sidebar />
+    
       <div className="p-6 bg-white rounded-lg shadow-md flex-1">
         {/* Header */}
         <div className="flex justify-between items-center mb-4">

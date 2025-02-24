@@ -1,5 +1,5 @@
 import { useState } from "react";
-import Sidebar from "../../components/Sidebar";
+
 
 const tabs = ["Account", "Notifications", "Security", "Billing"];
 const settingsData = {
@@ -58,7 +58,7 @@ const Settings = () => {
 
   return (
     <div className="flex h-screen">
-      <Sidebar />
+    
       <main className="flex-1 p-8 bg-gray-50">
         {/* Breadcrumb Navigation */}
         <nav className="text-gray-500 mb-4">

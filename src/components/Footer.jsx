@@ -368,7 +368,7 @@ const Footer = () => {
 
       {/* Bottom Section */}
       <div className="container mx-auto px-6 mt-8 border-t border-gray-300 pt-6 flex flex-col md:flex-row justify-between items-center text-sm text-gray-600">
-        <p>© 2024 Rental Review. All rights reserved.</p>
+        <p>© 2025 Rental Review. All rights reserved.</p>
         <div className="flex gap-4">
           <a href="#" className="hover:underline">
             Privacy Policy
