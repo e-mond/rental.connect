@@ -1,61 +1,77 @@
+import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   HomeIcon,
-  MagnifyingGlassIcon,
-  DocumentTextIcon,
-  ChatBubbleLeftIcon,
+  BuildingOfficeIcon,
+  UsersIcon,
+  StarIcon,
+  WrenchIcon,
+  EnvelopeIcon,
   CreditCardIcon,
-  UserIcon,
+  DocumentTextIcon,
   CogIcon,
   Bars3Icon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 
-const Sidebar = ({ isOpen, toggleSidebar }) => {
+const Sidebar = () => {
+  const [isOpen, setIsOpen] = useState(true);
   const location = useLocation();
 
+  const toggleSidebar = () => setIsOpen(!isOpen);
+
   const menuItems = [
-    { name: "Dashboard", path: "/tenant-dashboard/dashboard", icon: HomeIcon },
     {
-      name: "Search",
-      path: "/tenant-dashboard/search",
-      icon: MagnifyingGlassIcon,
+      name: "Dashboard",
+      path: "/dashboard",
+      icon: HomeIcon,
     },
     {
-      name: "Applications",
-      path: "/tenant-dashboard/applications",
-      icon: DocumentTextIcon,
+      name: "Properties",
+      path: "/dashboard/properties",
+      icon: BuildingOfficeIcon,
+    },
+    { name: "Tenants", path: "/dashboard/tenants", icon: UsersIcon },
+    { name: "Reviews", path: "/dashboard/reviews", icon: StarIcon },
+    {
+      name: "Maintenance",
+      path: "/dashboard/maintenance",
+      icon: WrenchIcon,
     },
     {
       name: "Messages",
-      path: "/tenant-dashboard/messages",
-      icon: ChatBubbleLeftIcon,
-    },
-    {
-      name: "Payments",
-      path: "/tenant-dashboard/payments",
-      icon: CreditCardIcon,
+      path: "/dashboard/messages",
+      icon: EnvelopeIcon,
     },
   ];
 
-  const accountItems = [
-    { name: "Profile", path: "/tenant-dashboard/profile", icon: UserIcon },
-    { name: "Settings", path: "/tenant-dashboard/settings", icon: CogIcon },
+  const managementItems = [
+    {
+      name: "Payments",
+      path: "/dashboard/payments",
+      icon: CreditCardIcon,
+    },
+    {
+      name: "Documents",
+      path: "/dashboard/documents",
+      icon: DocumentTextIcon,
+    },
+    { name: "Settings", path: "/dashboard/settings", icon: CogIcon },
   ];
 
   const user = {
-    name: "Kiky Kendrick",
-    accountType: "Tenant",
+    name: "Johnny Quayson",
+    accountType: "Landlord",
     profilePic: "https://via.placeholder.com/40",
   };
 
   return (
     <div
-      className={`bg-white h-screen shadow-md flex flex-col justify-between transition-all duration-300 ${
+      className={`bg-white h-full shadow-md flex flex-col justify-between transition-all duration-300 ${
         isOpen ? "w-64" : "w-20"
       }`}
     >
-      {/* Sidebar Header with Toggle Button */}
+      {/* Sidebar Header */}
       <div className="flex items-center justify-between p-4">
         <button
           onClick={toggleSidebar}
@@ -90,7 +106,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         <hr className="my-4 border-gray-300" />
 
         <ul>
-          {accountItems.map(({ name, path, icon: Icon }) => (
+          {managementItems.map(({ name, path, icon: Icon }) => (
             <li
               key={name}
               className={`p-3 rounded-lg ${

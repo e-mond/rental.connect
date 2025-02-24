@@ -1,4 +1,4 @@
-import Header from "../components/Header";
+import Header from "../layouts/Header";
 import Features from "../layouts/Features"; // Import Features from layouts
 import Notifications from "../layouts/Notifications"; 
 import RentalTerms from "../layouts/RentalTerms";
