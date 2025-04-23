@@ -1,168 +1,246 @@
-// import { FaHome, FaCreditCard, FaUsers } from "react-icons/fa";
-// import { Link } from "react-router-dom";
-
-// const LandlordSuccess = () => {
-//   return (
-//     <div className="flex flex-col items-center min-h-screen bg-gray-50 p-6">
-//       {/* Header */}
-//       <header className="w-full max-w-6xl flex justify-between items-center py-4">
-//         <h1 className="text-2xl font-bold">RentConnect</h1>
-//       </header>
-
-//       {/* Success Message Section */}
-//       <div className="w-full max-w-3xl bg-blue-50 p-6 rounded-lg shadow-md mb-8">
-//         <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
-//           <span className="inline-flex items-center justify-center w-6 h-6 bg-blue-600 text-white rounded-full">
-//             ✓
-//           </span>
-//           Account Created Successfully!
-//         </h2>
-//         <p className="text-gray-600 mt-2">
-//           Your landlord account has been set up and is ready to use.
-//         </p>
-//         <div className="mt-4 flex gap-4">
-//           <Link
-//             to="/dashboard"
-//             className="bg-blue-600 text-white px-4 py-2 rounded-md font-medium hover:bg-blue-700"
-//           >
-//             Go to Dashboard
-//           </Link>
-//           <Link
-//             to="/add-properties"
-//             className="bg-gray-100 text-blue-600 px-4 py-2 rounded-md font-medium hover:bg-gray-200"
-//           >
-//             Add More Properties
-//           </Link>
-//         </div>
-//       </div>
-
-//       {/* Next Steps Section */}
-//       <div className="w-full max-w-3xl">
-//         <h3 className="text-lg font-semibold mb-4">Next Steps</h3>
-//         <div className="flex flex-col gap-4">
-//           {/* Step 1 */}
-//           <div className="flex items-start gap-4">
-//             <div className="bg-blue-100 text-blue-600 p-3 rounded-full">
-//               <FaHome size={20} />
-//             </div>
-//             <div>
-//               <h4 className="text-md font-medium">Add Property Details</h4>
-//               <p className="text-gray-600 text-sm">
-//                 Upload photos and set rental terms.
-//               </p>
-//             </div>
-//           </div>
-//           {/* Step 2 */}
-//           <div className="flex items-start gap-4">
-//             <div className="bg-blue-100 text-blue-600 p-3 rounded-full">
-//               <FaCreditCard size={20} />
-//             </div>
-//             <div>
-//               <h4 className="text-md font-medium">Set Up Payment Methods</h4>
-//               <p className="text-gray-600 text-sm">
-//                 Configure how you'll receive rent payments.
-//               </p>
-//             </div>
-//           </div>
-//           {/* Step 3 */}
-//           <div className="flex items-start gap-4">
-//             <div className="bg-blue-100 text-blue-600 p-3 rounded-full">
-//               <FaUsers size={20} />
-//             </div>
-//             <div>
-//               <h4 className="text-md font-medium">Invite Tenants</h4>
-//               <p className="text-gray-600 text-sm">
-//                 Connect with your current tenants.
-//               </p>
-//             </div>
-//           </div>
-//         </div>
-//       </div>
-//     </div>
-//   );
-// };
-
-// export default LandlordSuccess;
-
-
+import { useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import GlobalSkeleton from "../components/GlobalSkeleton";
+import ErrorDisplay from "../components/ErrorDisplay";
+import Button from "../components/Button";
 import { FaHome, FaCreditCard, FaUsers } from "react-icons/fa";
-import { Link } from "react-router-dom";
+import { BASE_URL } from "../config";
+import { useDarkMode } from "../hooks/useDarkMode";
 
+
+/**
+ * LandlordSuccess Component
+ *
+ * Displays a welcome message and next steps after a landlord successfully creates an account.
+ * Validates the user's token via an API call and redirects to login if invalid.
+ * Features a skeleton loader with a minimum 2-second display and error handling for token validation.
+ */
 const LandlordSuccess = () => {
-  return (
-    <div className="flex flex-col items-center min-h-screen bg-gradient-to-br from-blue-50 to-gray-100 p-6">
-      {/* Header */}
-     
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const { darkMode } = useDarkMode(); // Access dark mode state
 
-      {/* Success Message Section */}
-      <div className="w-full max-w-3xl bg-white p-6 rounded-xl shadow-xl mb-10 animate-fadeIn">
-        <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
-          <span className="inline-flex items-center justify-center w-8 h-8 bg-green-500 text-white rounded-full shadow-md">
+  // Validate token using react-query
+  const { error, isLoading: validationLoading } = useQuery({
+    queryKey: ["validateLandlordToken"],
+    queryFn: () =>
+      fetch(`${BASE_URL}/api/auth/welcome`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      }).then((response) => {
+        if (!response.ok) {
+          throw new Error(`Token validation failed: HTTP ${response.status}`);
+        }
+        return response.text();
+      }),
+    enabled: !!localStorage.getItem("token"),
+    retry: false,
+  });
+
+  // Ensure minimum 2-second loading for UX consistency
+  useEffect(() => {
+    if (!validationLoading) {
+      const timer = setTimeout(() => setLoading(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [validationLoading]);
+
+  // Handle token validation and redirection
+  useEffect(() => {
+    if (!localStorage.getItem("token")) {
+      console.log("No token found, redirecting to login");
+      navigate("/landlordlogin");
+    } else if (error) {
+      console.error("Token validation error:", error.message);
+      if (error.message.includes("Failed to fetch")) {
+        console.error(
+          "Possible CORS or network issue. Check server configuration."
+        );
+      }
+      localStorage.removeItem("token");
+      navigate("/landlordlogin");
+    }
+  }, [navigate, error]);
+
+  if (loading) {
+    return (
+      <div
+        className={`flex h-screen ${darkMode ? "bg-gray-800" : "bg-gray-100"}`}
+      >
+        <div className="p-6 w-full">
+          <GlobalSkeleton
+            type="welcome"
+            bgColor={darkMode ? "bg-gray-700" : "bg-gray-300"}
+            animationSpeed="1.5s"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div
+        className={`flex h-screen ${darkMode ? "bg-gray-800" : "bg-gray-100"}`}
+      >
+        <div className="p-6 w-full">
+          <div className="flex flex-col items-center justify-center h-full space-y-4">
+            <ErrorDisplay
+              error={error.message}
+              className={darkMode ? "text-gray-200" : "text-gray-800"}
+            />
+            <Link to="/landlordlogin">
+              <Button
+                variant="primary"
+                className="px-4 py-2 text-sm sm:text-base"
+              >
+                Return to Login
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`flex flex-col items-center min-h-screen p-6 ${
+        darkMode
+          ? "bg-gradient-to-br from-gray-800 to-gray-900 text-gray-200"
+          : "bg-gradient-to-br from-blue-50 to-gray-100 text-gray-800"
+      }`}
+    >
+      <div
+        className={`w-full max-w-3xl p-6 rounded-xl shadow-xl mb-10 animate-fadeIn ${
+          darkMode ? "bg-gray-900 shadow-gray-700" : "bg-white shadow-gray-200"
+        }`}
+      >
+        <h2 className="text-2xl font-bold flex items-center gap-3">
+          <span
+            className={`inline-flex items-center justify-center w-8 h-8 rounded-full shadow-md ${
+              darkMode
+                ? "bg-green-600 text-gray-200"
+                : "bg-green-500 text-white"
+            }`}
+          >
             ✓
           </span>
           Account Created Successfully!
         </h2>
-        <p className="text-gray-600 mt-2">
+        <p
+          className={`text-gray-600 mt-2 ${
+            darkMode ? "text-gray-400" : "text-gray-600"
+          }`}
+        >
           Congratulations! Your landlord account is now active and ready to use.
         </p>
         <div className="mt-6 flex gap-4">
-          <Link
-            to="/dashboard"
-            className="px-6 py-3 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium shadow-md hover:from-blue-600 hover:to-blue-700 transform hover:scale-105 transition-all duration-300"
+          <Button
+            variant="primary"
+            as={Link}
+            to="/dashboard/landlord"
+            className="px-6 py-3 shadow-md"
+            aria-label="Go to Dashboard"
           >
             Go to Dashboard
-          </Link>
-          <Link
-            to="/add-properties"
-            className="px-6 py-3 rounded-lg bg-gray-100 text-blue-600 font-medium shadow hover:bg-gray-200 transform hover:scale-105 transition-all duration-300"
+          </Button>
+          <Button
+            variant="secondary"
+            as={Link}
+            to="/dashboard/landlord/properties"
+            className="px-6 py-3 shadow-md"
+            aria-label="Add More Properties"
           >
             Add More Properties
-          </Link>
+          </Button>
         </div>
       </div>
 
-      {/* Next Steps Section */}
       <div className="w-full max-w-3xl">
-        <h3 className="text-xl font-semibold mb-6 text-gray-800">Next Steps</h3>
+        <h3 className="text-xl font-semibold mb-6">Next Steps</h3>
         <div className="flex flex-col gap-6">
-          {/* Step 1 */}
-          <div className="flex items-start gap-6 bg-white p-5 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300">
-            <div className="bg-blue-100 text-blue-600 p-4 rounded-full">
+          <div
+            className={`flex items-start gap-6 p-5 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 ${
+              darkMode
+                ? "bg-gray-900 shadow-gray-700 hover:shadow-gray-600"
+                : "bg-white shadow-gray-200 hover:shadow-gray-300"
+            }`}
+          >
+            <div
+              className={`p-4 rounded-full ${
+                darkMode
+                  ? "bg-blue-900 text-blue-300"
+                  : "bg-blue-100 text-blue-600"
+              }`}
+            >
               <FaHome size={24} />
             </div>
             <div>
-              <h4 className="text-lg font-medium text-gray-800">
-                Add Property Details
-              </h4>
-              <p className="text-gray-600 text-sm">
+              <h4 className="text-lg font-medium">Add Property Details</h4>
+              <p
+                className={`text-sm ${
+                  darkMode ? "text-gray-400" : "text-gray-600"
+                }`}
+              >
                 Upload photos and set rental terms to attract tenants.
               </p>
             </div>
           </div>
-          {/* Step 2 */}
-          <div className="flex items-start gap-6 bg-white p-5 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300">
-            <div className="bg-blue-100 text-blue-600 p-4 rounded-full">
+          <div
+            className={`flex items-start gap-6 p-5 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 ${
+              darkMode
+                ? "bg-gray-900 shadow-gray-700 hover:shadow-gray-600"
+                : "bg-white shadow-gray-200 hover:shadow-gray-300"
+            }`}
+          >
+            <div
+              className={`p-4 rounded-full ${
+                darkMode
+                  ? "bg-blue-900 text-blue-300"
+                  : "bg-blue-100 text-blue-600"
+              }`}
+            >
               <FaCreditCard size={24} />
             </div>
             <div>
-              <h4 className="text-lg font-medium text-gray-800">
-                Set Up Payment Methods
-              </h4>
-              <p className="text-gray-600 text-sm">
+              <h4 className="text-lg font-medium">Set Up Payment Methods</h4>
+              <p
+                className={`text-sm ${
+                  darkMode ? "text-gray-400" : "text-gray-600"
+                }`}
+              >
                 Configure secure payment options to receive rent directly.
               </p>
             </div>
           </div>
-          {/* Step 3 */}
-          <div className="flex items-start gap-6 bg-white p-5 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300">
-            <div className="bg-blue-100 text-blue-600 p-4 rounded-full">
+          <div
+            className={`flex items-start gap-6 p-5 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 ${
+              darkMode
+                ? "bg-gray-900 shadow-gray-700 hover:shadow-gray-600"
+                : "bg-white shadow-gray-200 hover:shadow-gray-300"
+            }`}
+          >
+            <div
+              className={`p-4 rounded-full ${
+                darkMode
+                  ? "bg-blue-900 text-blue-300"
+                  : "bg-blue-100 text-blue-600"
+              }`}
+            >
               <FaUsers size={24} />
             </div>
             <div>
-              <h4 className="text-lg font-medium text-gray-800">
-                Invite Tenants
-              </h4>
-              <p className="text-gray-600 text-sm">
+              <h4 className="text-lg font-medium">Invite Tenants</h4>
+              <p
+                className={`text-sm ${
+                  darkMode ? "text-gray-400" : "text-gray-600"
+                }`}
+              >
                 Easily connect and manage your existing or new tenants.
               </p>
             </div>

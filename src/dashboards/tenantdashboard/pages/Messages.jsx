@@ -1,187 +1,134 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom"; // Import useNavigate for Button navigation
+import { BASE_URL } from "../../../config";
+import GlobalSkeleton from "../../../components/GlobalSkeleton";
+import { useDarkMode } from "../../../context/DarkModeContext"; // Import useDarkMode
+import Button from "../../../components/Button"; // Import Button component
 
-const Messages = () => {
-  const navigate = useNavigate();
-  const [activeFilter, setActiveFilter] = useState("all");
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      sender: "Sarah Wilson - Property Manager",
-      message:
-        "Your application for Modern Downtown Apartment has been reviewed...",
-      type: "review",
-      unread: true,
-      important: false,
-      image: "https://randomuser.me/api/portraits/women/44.jpg",
-    },
-    {
-      id: 2,
-      sender: "Maintenance Team",
-      message: "Schedule confirmation for property inspection next week...",
-      type: "maintenance",
-      unread: false,
-      important: true,
-      image: "https://randomuser.me/api/portraits/women/68.jpg",
-    },
-    {
-      id: 3,
-      sender: "System Notification",
-      message: "Your background check has been completed successfully...",
-      type: "notification",
-      unread: true,
-      important: false,
-      image: "",
-    },
-  ]);
+// Messages page for tenants to view their messages
+const TenantMessages = () => {
+  const [messages, setMessages] = useState([]); // State to store the list of messages
+  const [loading, setLoading] = useState(true); // State to handle loading status
+  const navigate = useNavigate(); // Initialize navigate for Button navigation
+  const { darkMode } = useDarkMode(); // Access dark mode state
 
-  // Filter Messages
-  const filteredMessages = messages.filter((msg) => {
-    if (activeFilter === "unread") return msg.unread;
-    if (activeFilter === "important") return msg.important;
-    return true;
-  });
+  // Fetch messages for the authenticated tenant
+  useEffect(() => {
+    const fetchMessages = async () => {
+      try {
+        const token = localStorage.getItem("token"); // Get the authentication token from localStorage
+        const response = await fetch(`${BASE_URL}/api/messages/tenant/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) throw new Error("Failed to fetch messages");
+        const data = await response.json();
+        setMessages(data);
+      } catch (err) {
+        console.error("Error fetching messages:", err);
+        setMessages([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchMessages();
+  }, []); // Empty dependency array to run only on mount
 
-  // Toggle Unread / Read Status
-  const toggleUnread = (id) => {
-    setMessages((prev) =>
-      prev.map((msg) => (msg.id === id ? { ...msg, unread: !msg.unread } : msg))
+  // Display skeleton loader while fetching messages
+  if (loading) {
+    return (
+      <div className="p-4 md:p-6">
+        <GlobalSkeleton
+          type="list"
+          bgColor={darkMode ? "bg-gray-700" : "bg-gray-300"}
+          animationSpeed="1.2s"
+        />
+      </div>
     );
-  };
-
-  // Toggle Important Status
-  const toggleImportant = (id) => {
-    setMessages((prev) =>
-      prev.map((msg) =>
-        msg.id === id ? { ...msg, important: !msg.important } : msg
-      )
-    );
-  };
+  }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100 p-4 md:p-6">
-      {/* Header */}
-      <h1 className="text-2xl font-bold">Messages</h1>
-
-      {/* Filter Tabs */}
-      <div className="flex space-x-4 mt-4 text-gray-600 overflow-x-auto">
-        {["all", "unread", "important"].map((filter) => (
-          <button
-            key={filter}
-            onClick={() => setActiveFilter(filter)}
-            className={`py-2 px-4 ${
-              activeFilter === filter
-                ? "border-b-2 border-blue-500 text-blue-500"
-                : ""
-            }`}
-          >
-            {filter.charAt(0).toUpperCase() + filter.slice(1)}
-          </button>
-        ))}
+    <div
+      className={`p-4 md:p-6 ${darkMode ? "text-gray-200" : "text-gray-800"}`}
+    >
+      {/* Header Section */}
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-lg md:text-2xl font-bold">Your Messages</h1>
+        <Button
+          variant="primary"
+          onClick={() => navigate("/dashboard/tenant/messages/compose")}
+          className="text-sm md:text-base"
+        >
+          Compose Message
+        </Button>
       </div>
 
       {/* Messages List */}
-      <div className="bg-white rounded-lg shadow-md p-4 mt-4 overflow-y-auto flex-grow">
-        {filteredMessages.length > 0 ? (
-          filteredMessages.map((msg) => (
+      <div
+        className={`rounded-lg shadow ${
+          darkMode ? "bg-gray-900 shadow-gray-700" : "bg-white shadow-gray-200"
+        }`}
+      >
+        {messages.length > 0 ? (
+          messages.map((message) => (
             <div
-              key={msg.id}
-              className="flex items-center justify-between py-3 border-b last:border-none"
+              key={message.id}
+              className={`flex flex-col md:flex-row justify-between items-start md:items-center p-3 border-b ${
+                darkMode ? "border-gray-700" : "border-gray-200"
+              }`}
             >
-              <div className="flex items-center gap-4">
-                {msg.image ? (
-                  <img
-                    src={msg.image}
-                    alt="Sender"
-                    className="w-10 h-10 rounded-full"
-                  />
-                ) : (
-                  <span className="w-10 h-10 flex items-center justify-center bg-blue-100 text-blue-500 rounded-full">
-                    🔔
-                  </span>
-                )}
-                <div>
-                  <h3
-                    className={`font-semibold ${
-                      msg.unread ? "text-black" : "text-gray-700"
+              <div className="flex items-start w-full">
+                {/* Property Image */}
+                <img
+                  src={
+                    message.property.imageUrl
+                      ? `${BASE_URL}${message.property.imageUrl}`
+                      : "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=40&h=40&fit=crop"
+                  }
+                  alt={message.property.title}
+                  className="w-10 h-10 md:w-12 md:h-12 rounded-full mr-3 md:mr-4"
+                  onError={(e) =>
+                    (e.target.src =
+                      "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=40&h=40&fit=crop")
+                  }
+                />
+                <div className="flex-1">
+                  {/* Property Title */}
+                  <p className="font-semibold text-sm md:text-base leading-tight">
+                    {message.property.title}
+                  </p>
+                  {/* Message Preview */}
+                  <p
+                    className={`text-xs md:text-sm ${
+                      darkMode ? "text-gray-400" : "text-gray-500"
                     }`}
                   >
-                    {msg.sender}
-                  </h3>
-                  <p className="text-sm text-gray-500">{msg.message}</p>
+                    {message.sender}: {message.content.substring(0, 50)}...
+                  </p>
                 </div>
               </div>
-              <div className="flex space-x-2">
-                {/* Mark as Read/Unread */}
-                <button
-                  onClick={() => toggleUnread(msg.id)}
-                  className={`text-sm px-2 py-1 rounded ${
-                    msg.unread
-                      ? "bg-blue-100 text-blue-500"
-                      : "bg-gray-200 text-gray-600"
-                  }`}
-                >
-                  {msg.unread ? "Mark Read" : "Mark Unread"}
-                </button>
-
-                {/* Mark as Important */}
-                <button
-                  onClick={() => toggleImportant(msg.id)}
-                  className={`text-sm px-2 py-1 rounded ${
-                    msg.important
-                      ? "bg-yellow-100 text-yellow-600"
-                      : "bg-gray-200 text-gray-600"
-                  }`}
-                >
-                  {msg.important ? "Unmark" : "Important"}
-                </button>
-              </div>
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  navigate(`/dashboard/tenant/messages/${message.id}`)
+                }
+                className="mt-2 md:mt-0 text-sm md:text-base"
+              >
+                View Message
+              </Button>
             </div>
           ))
         ) : (
-          <p className="text-gray-500 text-center mt-4">No messages found.</p>
+          <p
+            className={`text-center py-4 text-sm md:text-base ${
+              darkMode ? "text-gray-400" : "text-gray-500"
+            }`}
+          >
+            You have no messages.
+          </p>
         )}
-      </div>
-
-      {/* Quick Actions */}
-      <h2 className="text-xl font-bold mt-6">Quick Actions</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-4">
-        <div className="bg-white p-4 rounded-lg shadow-md text-center">
-          <div className="text-blue-500 text-2xl">📝</div>
-          <h3 className="font-semibold mt-2">New Message</h3>
-          <p className="text-sm text-gray-500">Start a new conversation</p>
-          <button
-            onClick={() => navigate("/messages/compose")}
-            className="mt-3 bg-blue-500 text-white px-4 py-2 rounded-lg"
-          >
-            Compose
-          </button>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow-md text-center">
-          <div className="text-blue-500 text-2xl">💬</div>
-          <h3 className="font-semibold mt-2">Support</h3>
-          <p className="text-sm text-gray-500">Contact customer support</p>
-          <button
-            onClick={() => navigate("/contact")}
-            className="mt-3 bg-blue-500 text-white px-4 py-2 rounded-lg"
-          >
-            Contact
-          </button>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow-md text-center">
-          <div className="text-blue-500 text-2xl">⚙️</div>
-          <h3 className="font-semibold mt-2">Preferences</h3>
-          <p className="text-sm text-gray-500">Manage notification settings</p>
-          <button
-            onClick={() => navigate("/settings")}
-            className="mt-3 bg-blue-500 text-white px-4 py-2 rounded-lg"
-          >
-            Settings
-          </button>
-        </div>
       </div>
     </div>
   );
 };
 
-export default Messages;
+export default TenantMessages;

@@ -8,6 +8,8 @@ import StephImg from "../assets/Steph.jpg";
 import HappyHomesLogo from "../assets/HappyHomes.jpg";
 import LandmarkLogo from "../assets/Landmark.jpg";
 import TrevlynLogo from "../assets/Trevlyn.jpg";
+import { useDarkMode } from "../hooks/useDarkMode";
+ // Import useDarkMode
 
 const testimonials = [
   {
@@ -37,6 +39,8 @@ const testimonials = [
 ];
 
 const TestimonialsSection = () => {
+  const { darkMode } = useDarkMode(); // Access dark mode state
+
   const sliderSettings = {
     dots: true,
     infinite: true,
@@ -49,14 +53,22 @@ const TestimonialsSection = () => {
   };
 
   return (
-    <div className="bg-white text-black flex flex-col items-center py-12">
+    <div
+      className={`flex flex-col items-center py-12 ${
+        darkMode ? "bg-gray-900 text-gray-200" : "bg-white text-black"
+      }`}
+    >
       <h2 className="text-3xl font-bold text-center mb-8">
         What Our Users Say
       </h2>
       <div className="grid grid-cols-1 -cols-3 gap-6 max-w-6xl w-fit p-4">
         <Slider
           {...sliderSettings}
-          className="w-full p-4 bg-gray-100 rounded-xl shadow-lg"
+          className={`w-full p-4 rounded-xl shadow-lg ${
+            darkMode
+              ? "bg-gray-800 shadow-gray-700"
+              : "bg-gray-100 shadow-gray-300"
+          }`}
         >
           {testimonials.map((testimonial, i) => (
             <div key={i} className="text-center p-6">
@@ -65,15 +77,27 @@ const TestimonialsSection = () => {
                 alt="Company Logo"
                 className="h-12 mx-auto mb-4"
               />
-              <p className="text-xl italic text-gray-600 mb-6">{`"${testimonial.quote}"`}</p>
+              <p
+                className={`text-xl italic mb-6 ${
+                  darkMode ? "text-gray-400" : "text-gray-600"
+                }`}
+              >{`"${testimonial.quote}"`}</p>
               <div className="flex flex-col items-center">
                 <img
                   src={testimonial.image}
                   alt={testimonial.name}
-                  className="w-20 h-20 rounded-full mb-4 border-4 border-gray-300"
+                  className={`w-20 h-20 rounded-full mb-4 border-4 ${
+                    darkMode ? "border-gray-600" : "border-gray-300"
+                  }`}
                 />
                 <h4 className="font-bold text-lg">{testimonial.name}</h4>
-                <p className="text-gray-500 text-sm">{testimonial.title}</p>
+                <p
+                  className={`text-sm ${
+                    darkMode ? "text-gray-500" : "text-gray-500"
+                  }`}
+                >
+                  {testimonial.title}
+                </p>
               </div>
             </div>
           ))}
