@@ -1,84 +1,174 @@
 import { FaCheckCircle } from "react-icons/fa";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+import { BASE_URL } from "../config";
+import { useDarkMode } from "../hooks/useDarkMode";
+import Button from "../components/Button"; // Import Button component
 
 const TenantAccountSuccess = () => {
-  return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center p-6">
-      
+  const navigate = useNavigate();
+  const { darkMode } = useDarkMode(); // Access dark mode state
 
-      {/* Success Message */}
-      <div className="w-full max-w-4xl bg-white p-8 rounded-xl shadow-md text-center">
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      console.log("No token found, redirecting to login");
+      navigate("/tenantlogin");
+      return;
+    }
+
+    fetch(`${BASE_URL}/api/auth/welcome`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then((response) => {
+        if (!response.ok) {
+          console.error("Token validation failed, status:", response.status);
+          localStorage.removeItem("token");
+          navigate("/tenantlogin");
+        } else {
+          console.log("Token validated successfully");
+        }
+      })
+      .catch((err) => {
+        console.error("Error validating token:", err);
+        if (err.message.includes("Failed to fetch")) {
+          console.error(
+            "Possible CORS or network issue. Please check server configuration."
+          );
+        }
+        localStorage.removeItem("token");
+        navigate("/tenantlogin");
+      });
+  }, [navigate]);
+
+  return (
+    <div
+      className={`min-h-screen flex flex-col items-center p-6 ${
+        darkMode ? "bg-gray-800 text-gray-200" : "bg-gray-50 text-gray-800"
+      }`}
+    >
+      <div
+        className={`w-full max-w-4xl p-8 rounded-xl shadow-md text-center ${
+          darkMode ? "bg-gray-900 shadow-gray-700" : "bg-white shadow-gray-200"
+        }`}
+      >
         <div className="flex justify-center items-center mb-4">
-          <FaCheckCircle className="text-green-500" size={40} />
+          <FaCheckCircle
+            className={darkMode ? "text-green-400" : "text-green-500"}
+            size={40}
+          />
         </div>
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">
+        <h2 className="text-2xl font-bold mb-2">
           Account Created Successfully!
         </h2>
-        <p className="text-gray-600 mb-6">
+        <p className={`mb-6 ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
           Your tenant account has been created. You can now access all features
           of RentConnect.
         </p>
         <div className="flex justify-center gap-4">
-          <Link
-            to="/tenant-dashboard"
-            className="px-6 py-3 rounded-lg bg-blue-500 text-white font-medium shadow-md hover:bg-blue-600 transition-all"
+          <Button
+            variant="primary"
+            as={Link}
+            to="/dashboard/tenant"
+            className="px-6 py-3 shadow-md"
           >
             Go to Dashboard
-          </Link>
-          <Link
-            to="/profile-setup"
-            className="px-6 py-3 rounded-lg border border-blue-500 text-blue-500 font-medium shadow-md hover:bg-blue-50 transition-all"
+          </Button>
+          <Button
+            variant="secondary"
+            as={Link}
+            to="/dashboard/tenant/profile"
+            className="px-6 py-3 shadow-md"
           >
             Complete Profile
-          </Link>
+          </Button>
         </div>
       </div>
 
-      {/* What's Next Section */}
       <div className="w-full max-w-4xl mt-10">
-        <h3 className="text-xl font-semibold text-gray-800 mb-6">
-          What's next?
-        </h3>
+        <h3 className="text-xl font-semibold mb-6">What&apos;s next?</h3>
         <div className="flex flex-col gap-6">
-          {/* Task 1 */}
-          <div className="flex items-start gap-6 bg-white p-5 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300">
-            <div className="bg-blue-100 text-blue-600 p-4 rounded-full">
+          <div
+            className={`flex items-start gap-6 p-5 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 ${
+              darkMode
+                ? "bg-gray-900 shadow-gray-700 hover:shadow-gray-600"
+                : "bg-white shadow-gray-200 hover:shadow-gray-300"
+            }`}
+          >
+            <div
+              className={`p-4 rounded-full ${
+                darkMode
+                  ? "bg-blue-900 text-blue-300"
+                  : "bg-blue-100 text-blue-600"
+              }`}
+            >
               <FaCheckCircle size={24} />
             </div>
             <div>
-              <h4 className="text-lg font-medium text-gray-800">
-                Complete your profile
-              </h4>
-              <p className="text-gray-600 text-sm">
+              <h4 className="text-lg font-medium">Complete your profile</h4>
+              <p
+                className={`text-sm ${
+                  darkMode ? "text-gray-400" : "text-gray-600"
+                }`}
+              >
                 Add your preferences and requirements for better property
                 suggestions.
               </p>
             </div>
           </div>
-          {/* Task 2 */}
-          <div className="flex items-start gap-6 bg-white p-5 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300">
-            <div className="bg-blue-100 text-blue-600 p-4 rounded-full">
+          <div
+            className={`flex items-start gap-6 p-5 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 ${
+              darkMode
+                ? "bg-gray-900 shadow-gray-700 hover:shadow-gray-600"
+                : "bg-white shadow-gray-200 hover:shadow-gray-300"
+            }`}
+          >
+            <div
+              className={`p-4 rounded-full ${
+                darkMode
+                  ? "bg-blue-900 text-blue-300"
+                  : "bg-blue-100 text-blue-600"
+              }`}
+            >
               <FaCheckCircle size={24} />
             </div>
             <div>
-              <h4 className="text-lg font-medium text-gray-800">
-                Browse properties
-              </h4>
-              <p className="text-gray-600 text-sm">
+              <h4 className="text-lg font-medium">Browse properties</h4>
+              <p
+                className={`text-sm ${
+                  darkMode ? "text-gray-400" : "text-gray-600"
+                }`}
+              >
                 Explore and find your perfect rental property.
               </p>
             </div>
           </div>
-          {/* Task 3 */}
-          <div className="flex items-start gap-6 bg-white p-5 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300">
-            <div className="bg-blue-100 text-blue-600 p-4 rounded-full">
+          <div
+            className={`flex items-start gap-6 p-5 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 ${
+              darkMode
+                ? "bg-gray-900 shadow-gray-700 hover:shadow-gray-600"
+                : "bg-white shadow-gray-200 hover:shadow-gray-300"
+            }`}
+          >
+            <div
+              className={`p-4 rounded-full ${
+                darkMode
+                  ? "bg-blue-900 text-blue-300"
+                  : "bg-blue-100 text-blue-600"
+              }`}
+            >
               <FaCheckCircle size={24} />
             </div>
             <div>
-              <h4 className="text-lg font-medium text-gray-800">
-                Set up payments
-              </h4>
-              <p className="text-gray-600 text-sm">
+              <h4 className="text-lg font-medium">Set up payments</h4>
+              <p
+                className={`text-sm ${
+                  darkMode ? "text-gray-400" : "text-gray-600"
+                }`}
+              >
                 Add your payment information to streamline transactions.
               </p>
             </div>

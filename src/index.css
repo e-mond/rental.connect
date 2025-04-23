@@ -1,1 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Poppins:wght@300;400;500&display=swap');
+
 @import "tailwindcss";
+
+/* Ensure dark mode applies globally */
+.dark {
+  background-color: #111827; /* gray-900 */
+  color: #e5e7eb; /* gray-200 */
+}

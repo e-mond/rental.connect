@@ -54,10 +54,11 @@
 // };
 
 // export default RentalTerms;
-
 import Term1 from "../assets/Term1.jpg";
 import Term2 from "../assets/Term2.jpg";
 import Term3 from "../assets/Term3.jpg";
+import { useDarkMode } from "../hooks/useDarkMode";
+ // Import useDarkMode
 
 const rentalOptions = [
   {
@@ -82,8 +83,14 @@ const rentalOptions = [
 ];
 
 const RentalTerms = () => {
+  const { darkMode } = useDarkMode(); // Access dark mode state
+
   return (
-    <section className="text-center py-16 px-6 md:px-16 bg-white">
+    <section
+      className={`text-center py-16 px-6 md:px-16 ${
+        darkMode ? "bg-gray-900 text-gray-200" : "bg-white text-black"
+      }`}
+    >
       <h2 className="text-3xl font-bold mb-10">
         Flexible Rental Options for Every Need: <br /> Short-Term and Long-Term
         Solutions
@@ -92,7 +99,11 @@ const RentalTerms = () => {
         {rentalOptions.map((feature, index) => (
           <div
             key={index}
-            className="text-center p-6 border rounded-lg shadow-md bg-bl-100"
+            className={`text-center p-6 border rounded-lg shadow-md transition duration-300 ${
+              darkMode
+                ? "bg-gray-800 border-gray-700 shadow-gray-700"
+                : "bg-bl-100 border-gray-300 shadow-gray-300"
+            }`}
           >
             <img
               src={feature.image}
@@ -100,12 +111,22 @@ const RentalTerms = () => {
               className="w-full h-40 object-cover rounded-md mb-4"
             />
             <h3 className="text-lg font-semibold">{feature.title}</h3>
-            <p className="text-gray-600 mt-2 mb-4">{feature.description}</p>
+            <p
+              className={`mt-2 mb-4 ${
+                darkMode ? "text-gray-400" : "text-gray-600"
+              }`}
+            >
+              {feature.description}
+            </p>
             <button
-              className="font-semibold text-black hover:text-blue-400 transition duration-300"
+              className={`font-semibold transition duration-300 ${
+                darkMode
+                  ? "text-gray-300 hover:text-blue-300"
+                  : "text-black hover:text-blue-400"
+              }`}
               onClick={() => alert(`${feature.link} clicked!`)}
             >
-              {feature.link} &rarr;
+              {feature.link} →
             </button>
           </div>
         ))}

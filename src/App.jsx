@@ -1,56 +1,31 @@
-import { Routes, Route, useLocation, Navigate } from "react-router-dom";
-
 import { useState, useEffect } from "react";
+import { useLocation, Outlet } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
-import Home from "./pages/Home";
-import About from "./pages/About";
-import Contact from "./pages/Contact";
-import TenantLogin from "./pages/TenantLogin";
-import LandlordLogin from "./pages/LandlordLogin";
-import Signup from "./pages/Signup";
-import TenantAccountSuccess from "./pages/TenantAccountSuccess";
-import LandlordAccountSuccess from "./pages/LandlordAccountSuccess";
-import NotFound from "./pages/NotFound";
-
-// Tenant Dashboard Components
-import TenantDashboard from "./dashboards/tenantdashboard/TenantDashboard";
-import TenantDashboardHome from "./dashboards/tenantdashboard/pages/DashboardHome";
-import TenantSearch from "./dashboards/tenantdashboard/pages/Search";
-import PropertyDetails from "./dashboards/tenantdashboard/pages/PropertyDetails";
-import TenantApplications from "./dashboards/tenantdashboard/pages/Applications";
-import TenantMessages from "./dashboards/tenantdashboard/pages/Messages";
-import TenantPayments from "./dashboards/tenantdashboard/pages/Payments";
-import Profile from "./dashboards/tenantdashboard/pages/Profile";
-import TenantSettings from "./dashboards/tenantdashboard/pages/Settings";
-
-// Landlord Dashboard Components
-import LandlordDashboard from "./dashboards/landlorddashboard/LandlordDashboard";
-import Properties from "./dashboards/landlorddashboard/pages/Properties";
-import Tenants from "./dashboards/landlorddashboard/pages/Tenants";
-import Reviews from "./dashboards/landlorddashboard/pages/Reviews";
-import Maintenance from "./dashboards/landlorddashboard/pages/Maintenance";
-import LandlordMessages from "./dashboards/landlorddashboard/pages/Messages";
-import LandlordPayments from "./dashboards/landlorddashboard/pages/management/Payments";
-import Documents from "./dashboards/landlorddashboard/pages/management/Documents";
-import LandlordSettings from "./dashboards/landlorddashboard/pages/management/Settings";
-import LandlordProfile from "./dashboards/landlorddashboard/pages/Profile";
+import ErrorBoundary from "./components/ErrorBoundary";
+import BackToTop from "./components/BackToTop";
+import { useDarkMode } from "./hooks/useDarkMode";
+import { UserInitializer } from "./components/UserInitializer";
 
 import "./index.css";
 
 function App() {
   const location = useLocation();
+  const { darkMode } = useDarkMode();
   const [loading, setLoading] = useState(false);
 
-  // Routes that should hide the footer
-  const dashboardRoutes = ["/tenant-dashboard", "/dashboard"];
-  const shouldHideFooter =
-    dashboardRoutes.includes(location.pathname) ||
-    location.pathname.startsWith("/tenant-dashboard/") ||
-    location.pathname.startsWith("/dashboard/");
+  const dashboardRoutes = [
+    "/dashboard/tenant",
+    "/dashboard/landlord",
+    "/account-success/tenant",
+    "/account-success/landlord",
+    "/dashboard",
+  ];
+  const shouldHideFooter = dashboardRoutes.some((route) =>
+    location.pathname.startsWith(route)
+  );
 
   useEffect(() => {
-    // Show loading when navigating
     const handleStart = () => setLoading(true);
     const handleStop = () => setTimeout(() => setLoading(false), 1000);
 
@@ -62,70 +37,30 @@ function App() {
 
   return (
     <>
+      <UserInitializer />
       {loading && (
-        <div className="fixed inset-0 bg-white flex items-center justify-center z-50">
+        <div
+          className={`fixed inset-0 flex items-center justify-center z-50 ${
+            darkMode ? "bg-gray-900" : "bg-white"
+          }`}
+        >
           <span className="loader"></span>
         </div>
       )}
-
-      <Navbar />
-
-      <main className="min-h-screen">
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/" element={<Home />} />
-          <Route path="/about" element={<About />} />
-          <Route path="/contact" element={<Contact />} />
-          <Route path="/tenant-login" element={<TenantLogin />} />
-          <Route path="/landlord-login" element={<LandlordLogin />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route
-            path="/account-success/tenant"
-            element={<TenantAccountSuccess />}
-          />
-          <Route
-            path="/account-success/landlord"
-            element={<LandlordAccountSuccess />}
-          />
-
-          {/* Tenant Dashboard Routes */}
-          <Route path="/tenant-dashboard/*" element={<TenantDashboard />}>
-            <Route index element={<Navigate to="dashboard" />} />
-            <Route path="dashboard" element={<TenantDashboardHome />} />
-            <Route path="search" element={<TenantSearch />} />
-            <Route path="property/:id" element={<PropertyDetails />} />
-            <Route path="applications" element={<TenantApplications />} />
-            <Route path="messages" element={<TenantMessages />} />
-            <Route path="payments" element={<TenantPayments />} />
-            <Route path="profile" element={<Profile />} />
-            <Route path="settings" element={<TenantSettings />} />
-          </Route>
-
-          {/* Direct Tenant Search Route */}
-          <Route path="/tenant/search" element={<TenantSearch />} />
-
-          {/* Landlord Dashboard Routes */}
-          <Route path="/dashboard/*" element={<LandlordDashboard />}>
-            <Route index element={<Navigate to="properties" />} />
-            <Route path="properties" element={<Properties />} />
-            <Route path="tenants" element={<Tenants />} />
-            <Route path="reviews" element={<Reviews />} />
-            <Route path="maintenance" element={<Maintenance />} />
-            <Route path="messages" element={<LandlordMessages />} />
-            <Route path="payments" element={<LandlordPayments />} />
-            <Route path="documents" element={<Documents />} />
-            <Route path="settings" element={<LandlordSettings />} />
-            <Route path="profile" element={<LandlordProfile />} />
-          </Route>
-
-          {/* 404 Not Found */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </main>
-
-      {!shouldHideFooter && <Footer />}
-
-      {/* Loader Styles */}
+      <div
+        className={`min-h-screen transition-colors duration-300 ${
+          darkMode ? "bg-gray-900 text-gray-200" : "bg-white text-gray-900"
+        }`}
+      >
+        <Navbar />
+        <ErrorBoundary customMessage="An error occurred in the main app. Please try again.">
+          <main className="min-h-screen">
+            <Outlet />
+          </main>
+          {!shouldHideFooter && <Footer />}
+          <BackToTop />
+        </ErrorBoundary>
+      </div>
       <style>
         {`
           .loader {
@@ -139,6 +74,10 @@ function App() {
           @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+          }
+          .dark .loader {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-left-color: white;
           }
         `}
       </style>

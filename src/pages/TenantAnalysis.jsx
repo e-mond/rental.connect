@@ -20,7 +20,7 @@ const TenantAnalysis = () => {
           Tenant Analysis
         </h2>
         <p className="text-gray-600 mt-2">
-          Here’s an overview of your tenants' performance and insights into
+          Here’s an overview of your tenants&apos; performance and insights into
           their rental activity.
         </p>
       </div>
