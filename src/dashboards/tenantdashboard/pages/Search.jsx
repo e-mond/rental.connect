@@ -7,7 +7,6 @@ import {
   HomeModernIcon,
 } from "@heroicons/react/24/outline";
 import { BASE_URL, DASHBOARD_BASE_URL } from "../../../config";
-import GlobalSkeleton from "../../../components/skeletons/TenantSkeleton";
 import { useDarkMode } from "../../../context/DarkModeContext";
 import Button from "../../../components/Button";
 
@@ -18,7 +17,7 @@ const conversionRates = {
   EUR: 0.058, // 1 GH₵ = 0.058 EUR
 };
 
-// Convert price from GH₵ to the selected currency (moved outside the component)
+// Convert price from GH₵ to the selected currency
 const convertPrice = (priceInCedis, targetCurrency) => {
   const price = parseFloat(priceInCedis);
   const convertedPrice = price * conversionRates[targetCurrency];
@@ -49,28 +48,40 @@ const Search = () => {
   useEffect(() => {
     const fetchProperties = async () => {
       try {
-        const token = localStorage.getItem("token");
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const response = await fetch(`${BASE_URL}/api/properties`, { headers });
-        if (!response.ok) throw new Error("Failed to fetch properties");
+        const response = await fetch(`${BASE_URL}/api/properties`, {
+          headers: {},
+        }); // No token needed for public endpoint
+        console.log(
+          "[Search] Fetch properties response status:",
+          response.status
+        );
+        if (!response.ok)
+          throw new Error(`Failed to fetch properties: ${response.statusText}`);
         const data = await response.json();
-        const mappedProperties = data.map((prop) => ({
-          id: prop.id,
-          title: prop.title,
-          priceInCedis: prop.price, // Store original price in GH₵
-          price: `${currency}${convertPrice(prop.price, currency)}/month`,
-          description: `${prop.description} • ${prop.bedrooms} bed • ${prop.bathrooms} bath`,
-          image: prop.imageUrl
-            ? `${BASE_URL}${prop.imageUrl}`
-            : "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&h=300&fit=crop",
-          location: prop.location,
-          bedrooms: prop.bedrooms,
-          bathrooms: prop.bathrooms,
-        }));
+        console.log("[Search] Fetch properties data:", data);
+        const mappedProperties = data.map((prop) => {
+          // Ensure primaryImageUrl is a valid path, otherwise set to null
+          const imageUrl =
+            prop.primaryImageUrl &&
+            !prop.primaryImageUrl.includes("placeholder.com")
+              ? `${BASE_URL}${prop.primaryImageUrl}`
+              : null;
+          return {
+            id: prop.id,
+            title: prop.title,
+            priceInCedis: prop.price,
+            price: `${currency}${convertPrice(prop.price, currency)}/month`,
+            description: `${prop.description} • ${prop.bedrooms} bed • ${prop.bathrooms} bath`,
+            image: imageUrl,
+            location: prop.location,
+            bedrooms: prop.bedrooms,
+            bathrooms: prop.bathrooms,
+          };
+        });
         setProperties(mappedProperties);
         setFilteredProperties(mappedProperties);
       } catch (err) {
-        console.error("Failed to fetch properties:", err);
+        console.error("[Search] Failed to fetch properties:", err);
         setProperties([]);
         setFilteredProperties([]);
       } finally {
@@ -78,7 +89,7 @@ const Search = () => {
       }
     };
     fetchProperties();
-  }, [currency]); // Dependency array now only includes 'currency'
+  }, [currency]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -136,11 +147,13 @@ const Search = () => {
 
   if (loading) {
     return (
-      <GlobalSkeleton
-        type="tenant-search"
-        bgColor={darkMode ? "bg-gray-700" : "bg-gray-300"}
-        animationSpeed="2.5s"
-      />
+      <div
+        className={`p-4 md:p-6 space-y-6 z-0 ${
+          darkMode ? "text-gray-200" : "text-gray-800"
+        }`}
+      >
+        <p>Loading...</p>
+      </div>
     );
   }
 
@@ -403,15 +416,17 @@ const Search = () => {
                     : "border-gray-200 bg-gray-50 shadow-gray-200"
                 }`}
               >
-                <img
-                  src={property.image}
-                  alt={property.title}
-                  className="w-full h-40 object-cover rounded-lg"
-                  onError={(e) =>
-                    (e.target.src =
-                      "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&h=300&fit=crop")
-                  }
-                />
+                {property.image ? (
+                  <img
+                    src={property.image}
+                    alt={property.title}
+                    className="w-full h-40 object-cover rounded-lg"
+                  />
+                ) : (
+                  <div className="w-full h-40 bg-gray-200 rounded-lg flex items-center justify-center">
+                    <span className="text-gray-500">No image</span>
+                  </div>
+                )}
                 <h3 className="font-bold mt-2 text-sm md:text-base">
                   {property.title}
                 </h3>

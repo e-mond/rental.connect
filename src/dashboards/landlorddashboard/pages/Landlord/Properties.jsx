@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
-import { useOutletContext } from "react-router-dom";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useState, useEffect, useMemo } from "react";
+import { useOutletContext, useNavigate } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   FaEdit,
   FaTrash,
@@ -12,20 +12,35 @@ import {
   FaBath,
   FaMapMarkerAlt,
   FaMoneyBillWave,
+  FaSpinner,
 } from "react-icons/fa";
+import { toast } from "react-toastify";
 import GlobalSkeleton from "../../../../components/GlobalSkeleton";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
-import landlordApi from "../../../../api/landlord";
+import landlordApi from "../../../../api/landlordApi";
 import { useDarkMode } from "../../../../context/DarkModeContext";
-import Button from "../../../../components/Button"; 
+import Button from "../../../../components/Button";
 
+/**
+ * Component for managing landlord properties.
+ * Displays a list of properties with options to add, edit, or delete.
+ * Handles image uploads, form validation, and API interactions.
+ * Properties are fetched from the backend, which already filters by landlordId.
+ */
 const Properties = () => {
-  const { darkMode } = useDarkMode(); // Access dark mode state
+  const { darkMode } = useDarkMode();
+  const navigate = useNavigate();
   const {
-    properties: initialProperties,
+    user,
     isLoading: contextLoading,
-    setProperties,
+    refetchProperties,
+    refetchDashboardData,
   } = useOutletContext();
+
+  // Initialize QueryClient for React Query
+  const queryClient = useQueryClient();
+
+  // State management
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("All Properties");
   const [searchQuery, setSearchQuery] = useState("");
@@ -39,81 +54,274 @@ const Properties = () => {
     bathrooms: "",
     location: "",
     price: "",
-    currency: "GH₵", // Default currency
+    currency: "GH₵",
     squareFeet: "",
     builtYear: "",
     availableFrom: "",
     utilitiesIncluded: false,
     amenities: [],
-    status: "Active", // Default status
+    status: "Active",
     images: [],
+    isSharedBedrooms: false,
+    isSharedBathrooms: false,
   });
   const [imagePreviews, setImagePreviews] = useState([]);
-  const [customAmenity, setCustomAmenity] = useState(""); // For extra amenities
+  const [primaryImageIndex, setPrimaryImageIndex] = useState(null);
+  const [customAmenity, setCustomAmenity] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
 
+  /**
+   * Validates a JWT token by checking its expiration.
+   * @param {string} token - The JWT token
+   * @returns {boolean} - Whether the token is valid
+   */
+  const isTokenValid = (token) => {
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      const currentTime = Math.floor(Date.now() / 1000);
+      return payload.exp > currentTime;
+    } catch (error) {
+      console.error("[Properties] Token validation error:", error);
+      return false;
+    }
+  };
+
+  // Fetch properties using React Query
   const {
-    data: properties,
+    data: properties = [],
     error,
     isLoading: queryLoading,
   } = useQuery({
-    queryKey: ["properties"],
-    queryFn: () => landlordApi.fetchProperties(localStorage.getItem("token")),
-    enabled: !contextLoading,
-    onSuccess: (data) => setProperties(data),
+    queryKey: ["properties", user?._id],
+    queryFn: async () => {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("No authentication token found");
+      if (!isTokenValid(token)) {
+        localStorage.removeItem("token");
+        navigate("/login");
+        throw new Error("Session expired. Please log in again.");
+      }
+      if (!user?._id) throw new Error("User ID not available");
+      console.log("[Properties] Fetching properties for user:", user._id);
+      const response = await landlordApi.fetchProperties(token);
+      console.log("[Properties] Fetched properties:", response);
+      return response || [];
+    },
+    enabled: !contextLoading && !!user?._id,
+    onSuccess: (data) => {
+      console.log("[Properties] Fetched properties:", data);
+      data.forEach((prop) => {
+        console.log(`[Properties] Property ${prop.title}:`, {
+          imageUrls: prop.imageUrls,
+          primaryImageUrl: prop.primaryImageUrl,
+          landlordId: prop.landlordId,
+        });
+      });
+    },
+    onError: (error) => {
+      console.error("[Properties] Fetch error:", error);
+      if (error.message.includes("Session expired")) return;
+      toast.error(error.message || "Failed to fetch properties", {
+        position: "top-right",
+        autoClose: 3000,
+      });
+    },
+    retry: 1,
+    staleTime: 5 * 60 * 1000,
   });
 
+  // Mutation for adding a property
   const addPropertyMutation = useMutation({
-    mutationFn: (formData) =>
-      landlordApi.addProperty(localStorage.getItem("token"), formData),
-    onSuccess: (data) => {
-      setProperties((prev) => [...prev, data]);
-      resetForm();
-    },
-    onError: () => alert("Failed to add property"),
-  });
-
-  const updatePropertyMutation = useMutation({
-    mutationFn: ({ id, formData }) =>
-      landlordApi.updateProperty(localStorage.getItem("token"), id, formData),
-    onSuccess: (data) => {
-      setProperties((prev) =>
-        prev.map((prop) => (prop.id === editPropertyId ? data : prop))
+    mutationFn: async ({ property, images, primaryImageIndex }) => {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("No authentication token found");
+      if (!isTokenValid(token)) {
+        localStorage.removeItem("token");
+        navigate("/login");
+        throw new Error("Session expired. Please log in again.");
+      }
+      const formData = new FormData();
+      formData.append(
+        "property",
+        JSON.stringify({ ...property, landlordId: user._id })
       );
+      images.forEach((image) => formData.append("images", image));
+      if (primaryImageIndex !== null) {
+        formData.append("primaryImageIndex", primaryImageIndex);
+      }
+      return landlordApi.addProperty(token, formData, async () => {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["properties", user._id] }),
+          refetchProperties(),
+          refetchDashboardData && refetchDashboardData(),
+        ]);
+      });
+    },
+    onSuccess: (data) => {
+      console.log("[Properties] Add property success:", data);
       resetForm();
+      toast.success("Property added successfully!", {
+        position: "top-right",
+        autoClose: 3000,
+      });
+      navigate("/dashboard/landlord/properties");
     },
-    onError: () => alert("Failed to update property"),
+    onError: (error) => {
+      console.error("[Properties] Add property error:", error);
+      if (error.message.includes("Session expired")) return;
+      handleMutationError(error, "Failed to add property");
+    },
   });
 
+  // Mutation for updating a property
+  const updatePropertyMutation = useMutation({
+    mutationFn: async ({ id, property, images, primaryImageIndex }) => {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("No authentication token found");
+      console.log("[Properties] Update property token:", token);
+      if (!isTokenValid(token)) {
+        localStorage.removeItem("token");
+        navigate("/login");
+        throw new Error("Session expired. Please log in again.");
+      }
+      const formData = new FormData();
+      formData.append(
+        "property",
+        JSON.stringify({ ...property, landlordId: user._id })
+      );
+      images.forEach((image) => formData.append("images", image));
+      if (primaryImageIndex !== null) {
+        formData.append("primaryImageIndex", primaryImageIndex);
+      }
+      return landlordApi.updateProperty(token, id, formData, async () => {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["properties", user._id] }),
+          refetchProperties(),
+          refetchDashboardData && refetchDashboardData(),
+        ]);
+      });
+    },
+    onSuccess: (data) => {
+      console.log("[Properties] Update property success:", data);
+      resetForm();
+      toast.success("Property updated successfully!", {
+        position: "top-right",
+        autoClose: 3000,
+      });
+      navigate("/dashboard/landlord/properties");
+    },
+    onError: (error) => {
+      console.error("[Properties] Update property error:", error);
+      if (error.message.includes("Session expired")) return;
+      handleMutationError(error, "Failed to update property");
+    },
+  });
+
+  // Mutation for deleting a property
   const deletePropertyMutation = useMutation({
-    mutationFn: (propertyId) =>
-      landlordApi.deleteProperty(localStorage.getItem("token"), propertyId),
-    onSuccess: (_, propertyId) => {
-      setProperties((prev) => prev.filter((prop) => prop.id !== propertyId));
+    mutationFn: async (propertyId) => {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("No authentication token found");
+      if (!isTokenValid(token)) {
+        localStorage.removeItem("token");
+        navigate("/login");
+        throw new Error("Session expired. Please log in again.");
+      }
+      return landlordApi.deleteProperty(token, propertyId, async () => {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["properties", user._id] }),
+          refetchProperties(),
+          refetchDashboardData && refetchDashboardData(),
+        ]);
+      });
     },
-    onError: () => alert("Failed to delete property"),
+    onSuccess: (_, propertyId) => {
+      console.log("[Properties] Delete property success:", propertyId);
+      toast.success("Property deleted successfully!", {
+        position: "top-right",
+        autoClose: 3000,
+      });
+      navigate("/dashboard/landlord/properties");
+    },
+    onError: (error) => {
+      console.error("[Properties] Delete property error:", error);
+      if (error.message.includes("Session expired")) return;
+      handleMutationError(error, "Failed to delete property");
+    },
   });
 
+  /**
+   * Handles mutation errors with appropriate messaging.
+   * @param {Error} error - The error object
+   * @param {string} defaultMessage - Default error message
+   */
+  const handleMutationError = (error, defaultMessage) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem("token");
+      navigate("/login");
+      toast.error("Session expired. Please log in again.", {
+        position: "top-right",
+        autoClose: 3000,
+      });
+      return;
+    }
+    if (error.response?.data) {
+      const errors = error.response.data;
+      const errorMessages = Object.entries(errors)
+        .map(([field, message]) => `${field}: ${message}`)
+        .join(", ");
+      setErrorMessage(errorMessages || defaultMessage);
+      toast.error(errorMessages || defaultMessage, {
+        position: "top-right",
+        autoClose: 3000,
+      });
+    } else {
+      setErrorMessage(error.message || defaultMessage);
+      toast.error(error.message || defaultMessage, {
+        position: "top-right",
+        autoClose: 3000,
+      });
+    }
+  };
+
+  // Handle loading state with delayed transition
   useEffect(() => {
     if (!contextLoading && !queryLoading) {
-      const timer = setTimeout(() => setLoading(false), 2000);
+      const timer = setTimeout(() => setLoading(false), 1000);
       return () => clearTimeout(timer);
     }
   }, [contextLoading, queryLoading]);
 
-  const filteredProperties = (properties || initialProperties || [])
-    .filter((property) => {
-      const status = filter.replace(" Rentals", "");
-      return filter === "All Properties" || property.status === status;
-    })
-    .filter(
-      (property) =>
-        property.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        property.description
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase()) ||
-        property.location.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+  // Clean up image previews on unmount
+  useEffect(() => {
+    return () => {
+      imagePreviews.forEach((preview) => URL.revokeObjectURL(preview));
+    };
+  }, [imagePreviews]);
 
+  // Filter properties based on status and search query
+  const filteredProperties = useMemo(
+    () =>
+      (properties || [])
+        .filter((property) => {
+          const status = filter === "Active Rentals" ? "Active" : filter;
+          return filter === "All Properties" || property.status === status;
+        })
+        .filter(
+          (property) =>
+            property.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            property.description
+              ?.toLowerCase()
+              .includes(searchQuery.toLowerCase()) ||
+            property.location?.toLowerCase().includes(searchQuery.toLowerCase())
+        ),
+    [properties, filter, searchQuery]
+  );
+
+  /**
+   * Handles input changes for form fields.
+   * @param {Event} e - Input event
+   */
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     setNewProperty((prev) => ({
@@ -122,6 +330,10 @@ const Properties = () => {
     }));
   };
 
+  /**
+   * Handles amenities checkbox changes.
+   * @param {Event} e - Checkbox event
+   */
   const handleAmenitiesChange = (e) => {
     const { value, checked } = e.target;
     setNewProperty((prev) => {
@@ -132,10 +344,17 @@ const Properties = () => {
     });
   };
 
+  /**
+   * Handles custom amenity input.
+   * @param {Event} e - Input event
+   */
   const handleCustomAmenity = (e) => {
     setCustomAmenity(e.target.value);
   };
 
+  /**
+   * Adds a custom amenity to the list.
+   */
   const addCustomAmenity = () => {
     if (
       customAmenity.trim() &&
@@ -149,19 +368,35 @@ const Properties = () => {
     }
   };
 
+  /**
+   * Handles image uploads with validation.
+   * @param {Event} e - File input event
+   */
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
     if (files.length + newProperty.images.length > 5) {
-      alert("You can upload a maximum of 5 images.");
+      setErrorMessage("You can upload a maximum of 5 images.");
+      toast.error("You can upload a maximum of 5 images.", {
+        position: "top-right",
+        autoClose: 3000,
+      });
       return;
     }
     files.forEach((file) => {
       if (file.size > 5 * 1024 * 1024) {
-        alert(`File ${file.name} exceeds 5MB.`);
+        setErrorMessage(`File ${file.name} exceeds 5MB.`);
+        toast.error(`File ${file.name} exceeds 5MB.`, {
+          position: "top-right",
+          autoClose: 3000,
+        });
         return;
       }
       if (!file.type.startsWith("image/")) {
-        alert(`File ${file.name} is not an image.`);
+        setErrorMessage(`File ${file.name} is not an image.`);
+        toast.error(`File ${file.name} is not an image.`, {
+          position: "top-right",
+          autoClose: 3000,
+        });
         return;
       }
     });
@@ -173,16 +408,42 @@ const Properties = () => {
       ...prev,
       ...files.map((file) => URL.createObjectURL(file)),
     ]);
+    if (
+      primaryImageIndex === null &&
+      newProperty.images.length + files.length > 0
+    ) {
+      setPrimaryImageIndex(newProperty.images.length);
+    }
   };
 
+  /**
+   * Removes an uploaded image.
+   * @param {number} index - Index of the image to remove
+   */
   const removeImage = (index) => {
     setNewProperty((prev) => ({
       ...prev,
       images: prev.images.filter((_, i) => i !== index),
     }));
     setImagePreviews((prev) => prev.filter((_, i) => i !== index));
+    if (primaryImageIndex === index) {
+      setPrimaryImageIndex(null);
+    } else if (primaryImageIndex > index) {
+      setPrimaryImageIndex(primaryImageIndex - 1);
+    }
   };
 
+  /**
+   * Sets the primary image index.
+   * @param {number} index - Index of the primary image
+   */
+  const handleSetPrimaryImage = (index) => {
+    setPrimaryImageIndex(index);
+  };
+
+  /**
+   * Resets the form state.
+   */
   const resetForm = () => {
     setNewProperty({
       title: "",
@@ -199,76 +460,111 @@ const Properties = () => {
       amenities: [],
       status: "Active",
       images: [],
+      isSharedBedrooms: false,
+      isSharedBathrooms: false,
     });
     setImagePreviews([]);
+    setPrimaryImageIndex(null);
     setCustomAmenity("");
     setIsAdding(false);
     setIsEditing(false);
     setEditPropertyId(null);
+    setErrorMessage("");
   };
 
+  /**
+   * Handles adding a new property.
+   * @param {Event} e - Form submit event
+   */
   const handleAddProperty = (e) => {
     e.preventDefault();
-    const formData = new FormData();
-    Object.entries(newProperty).forEach(([key, value]) => {
-      if (key === "amenities") {
-        value.forEach((amenity) => formData.append("amenities", amenity));
-      } else if (key === "images") {
-        value.forEach((image) => formData.append("images", image));
-      } else if (value !== null && value !== "") {
-        formData.append(key, value);
-      }
+    setErrorMessage("");
+    const property = { ...newProperty };
+    delete property.images; // Images are sent separately
+    addPropertyMutation.mutate({
+      property,
+      images: newProperty.images,
+      primaryImageIndex,
     });
-    addPropertyMutation.mutate(formData);
   };
 
+  /**
+   * Populates the form for editing a property.
+   * @param {Object} property - Property data
+   */
   const handleEditProperty = (property) => {
     setIsEditing(true);
-    setEditPropertyId(property.id);
+    setEditPropertyId(property._id); // Use _id instead of id
     setNewProperty({
-      title: property.title,
-      description: property.description,
-      bedrooms: property.bedrooms,
-      bathrooms: property.bathrooms,
-      location: property.location,
-      price: property.price,
+      title: property.title || "",
+      description: property.description || "",
+      bedrooms: property.bedrooms || "",
+      bathrooms: property.bathrooms || "",
+      location: property.location || "",
+      price: property.price || "",
       currency: property.currency || "GH₵",
-      squareFeet: property.squareFeet,
-      builtYear: property.builtYear,
-      availableFrom: property.availableFrom,
-      utilitiesIncluded: property.utilitiesIncluded,
-      amenities: property.amenities,
+      squareFeet: property.squareFeet || "",
+      builtYear: property.builtYear || "",
+      availableFrom: property.availableFrom || "",
+      utilitiesIncluded: property.utilitiesIncluded || false,
+      amenities: property.amenities || [],
       status: property.status || "Active",
       images: [],
+      isSharedBedrooms: property.isSharedBedrooms || false,
+      isSharedBathrooms: property.isSharedBathrooms || false,
     });
-    setImagePreviews(property.imageUrls || [property.imageUrl] || []);
+    const imageUrls = property.imageUrls || [];
+    setImagePreviews(
+      imageUrls.map((url) =>
+        url.startsWith("http") ? url : `${landlordApi.baseUrl}${url}`
+      )
+    );
+    const primaryUrl = property.primaryImageUrl;
+    const index =
+      imageUrls && primaryUrl
+        ? imageUrls.indexOf(
+            primaryUrl.startsWith("http")
+              ? primaryUrl
+              : primaryUrl.replace(landlordApi.baseUrl, "")
+          )
+        : -1;
+    setPrimaryImageIndex(index >= 0 ? index : imageUrls.length > 0 ? 0 : null);
   };
 
+  /**
+   * Handles updating a property.
+   * @param {Event} e - Form submit event
+   */
   const handleUpdateProperty = (e) => {
     e.preventDefault();
-    const formData = new FormData();
-    Object.entries(newProperty).forEach(([key, value]) => {
-      if (key === "amenities") {
-        value.forEach((amenity) => formData.append("amenities", amenity));
-      } else if (key === "images") {
-        value.forEach((image) => formData.append("images", image));
-      } else if (value !== null && value !== "") {
-        formData.append(key, value);
-      }
+    setErrorMessage("");
+    const property = { ...newProperty };
+    delete property.images; // Images are sent separately
+    updatePropertyMutation.mutate({
+      id: editPropertyId,
+      property,
+      images: newProperty.images,
+      primaryImageIndex,
     });
-    updatePropertyMutation.mutate({ id: editPropertyId, formData });
   };
 
+  /**
+   * Handles deleting a property with confirmation.
+   * @param {string} propertyId - ID of the property to delete
+   */
   const handleDeleteProperty = (propertyId) => {
     if (!window.confirm("Are you sure you want to delete this property?"))
       return;
+    setErrorMessage("");
     deletePropertyMutation.mutate(propertyId);
   };
 
+  // Render error state
   if (error) {
     return <ErrorDisplay error={error} />;
   }
 
+  // Render loading state
   if (contextLoading || loading || queryLoading) {
     return <GlobalSkeleton type="properties" />;
   }
@@ -279,6 +575,17 @@ const Properties = () => {
         darkMode ? "bg-gray-900 text-gray-200" : "bg-gray-50 text-gray-800"
       }`}
     >
+      {/* Error Message */}
+      {errorMessage && (
+        <div
+          className={`mb-4 p-3 rounded-md ${
+            darkMode ? "bg-red-800 text-red-200" : "bg-red-100 text-red-800"
+          }`}
+        >
+          {errorMessage}
+        </div>
+      )}
+
       {/* Header Section */}
       <div
         className={`flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-6 space-y-3 sm:space-y-0 ${
@@ -368,7 +675,6 @@ const Properties = () => {
                   }`}
                   placeholder="e.g., Spacious living area"
                   rows="3"
-                  required
                 />
               </div>
               <div className="flex flex-col sm:flex-row sm:space-x-3">
@@ -391,7 +697,7 @@ const Properties = () => {
                         : "bg-white text-gray-800 border-gray-300"
                     }`}
                     placeholder="e.g., 2"
-                    min="1"
+                    min="0"
                     required
                   />
                 </div>
@@ -414,9 +720,52 @@ const Properties = () => {
                         : "bg-white text-gray-800 border-gray-300"
                     }`}
                     placeholder="e.g., 2"
-                    min="1"
+                    min="0"
                     required
                   />
+                </div>
+              </div>
+              <div>
+                <label
+                  className={`block text-sm font-medium ${
+                    darkMode ? "text-gray-300" : "text-gray-700"
+                  }`}
+                >
+                  Shared Facilities
+                </label>
+                <div className="flex space-x-4 mt-1">
+                  <label className="flex items-center text-sm">
+                    <input
+                      type="checkbox"
+                      name="isSharedBedrooms"
+                      checked={newProperty.isSharedBedrooms}
+                      onChange={handleInputChange}
+                      className={`h-4 w-4 ${
+                        darkMode ? "text-blue-400" : "text-blue-600"
+                      } focus:ring-${
+                        darkMode ? "blue-400" : "blue-500"
+                      } border-${
+                        darkMode ? "gray-600" : "gray-300"
+                      } rounded mr-2`}
+                    />
+                    Shared Bedrooms
+                  </label>
+                  <label className="flex items-center text-sm">
+                    <input
+                      type="checkbox"
+                      name="isSharedBathrooms"
+                      checked={newProperty.isSharedBathrooms}
+                      onChange={handleInputChange}
+                      className={`h-4 w-4 ${
+                        darkMode ? "text-blue-400" : "text-blue-600"
+                      } focus:ring-${
+                        darkMode ? "blue-400" : "blue-500"
+                      } border-${
+                        darkMode ? "gray-600" : "gray-300"
+                      } rounded mr-2`}
+                    />
+                    Shared Bathrooms
+                  </label>
                 </div>
               </div>
               <div>
@@ -501,7 +850,6 @@ const Properties = () => {
                   }`}
                   placeholder="e.g., 1200"
                   min="0"
-                  required
                 />
               </div>
               <div>
@@ -525,7 +873,6 @@ const Properties = () => {
                   placeholder="e.g., 2020"
                   min="1900"
                   max={new Date().getFullYear()}
-                  required
                 />
               </div>
               <div>
@@ -546,7 +893,6 @@ const Properties = () => {
                       ? "bg-gray-700 text-gray-200 border-gray-600"
                       : "bg-white text-gray-800 border-gray-300"
                   }`}
-                  required
                 />
               </div>
               <div>
@@ -656,7 +1002,7 @@ const Properties = () => {
                           className={`bg-${
                             darkMode ? "gray-700" : "blue-100"
                           } text-${
-                            darkMode ? "gray-200" : "blue-800"
+                            darkMode ? "text-gray-200" : "text-blue-800"
                           } text-xs px-2 py-1 rounded-full`}
                         >
                           {amenity}
@@ -704,6 +1050,10 @@ const Properties = () => {
                           src={preview}
                           alt={`Preview ${index + 1}`}
                           className="w-16 h-16 object-cover rounded-md"
+                          onError={(e) =>
+                            (e.target.outerHTML =
+                              '<div className="w-16 h-16 bg-gray-200 rounded-md flex items-center justify-center"><span className="text-gray-500 text-xs">No image</span></div>')
+                          }
                         />
                         <Button
                           variant="danger"
@@ -713,6 +1063,16 @@ const Properties = () => {
                         >
                           <FaTimes />
                         </Button>
+                        <label className="flex items-center mt-1 text-xs">
+                          <input
+                            type="radio"
+                            name="primaryImage"
+                            checked={primaryImageIndex === index}
+                            onChange={() => handleSetPrimaryImage(index)}
+                            className="mr-1"
+                          />
+                          Primary
+                        </label>
                       </div>
                     ))}
                   </div>
@@ -729,8 +1089,16 @@ const Properties = () => {
                 <Button
                   variant="primary"
                   type="submit"
+                  disabled={
+                    addPropertyMutation.isLoading ||
+                    updatePropertyMutation.isLoading
+                  }
                   aria-label={isEditing ? "Update property" : "Save property"}
                 >
+                  {addPropertyMutation.isLoading ||
+                  updatePropertyMutation.isLoading ? (
+                    <FaSpinner className="animate-spin mr-2" />
+                  ) : null}
                   {isEditing ? "Update" : "Save"}
                 </Button>
               </div>
@@ -792,159 +1160,186 @@ const Properties = () => {
       {/* Property List */}
       <div className="space-y-4">
         {filteredProperties.length > 0 ? (
-          filteredProperties.map((property) => (
-            <div
-              key={property.id}
-              className={`bg-${
-                darkMode ? "gray-800" : "white"
-              } rounded-lg shadow-md p-4 sm:p-5 transition-all duration-300 hover:shadow-lg ${
-                property.status === "Active"
-                  ? "border-l-4 border-green-500"
-                  : property.status === "Vacant"
-                  ? "border-l-4 border-yellow-500"
-                  : property.status === "Under Maintenance"
-                  ? "border-l-4 border-red-500"
-                  : "border-l-4 border-gray-300"
-              }`}
-            >
-              <div className="flex flex-col sm:flex-row sm:space-x-4">
-                {/* Image Carousel */}
-                <div className="w-full sm:w-48 h-48 sm:h-40 rounded-lg overflow-hidden mb-3 sm:mb-0">
-                  {property.imageUrls?.length > 0 || property.imageUrl ? (
-                    <div className="relative w-full h-full">
-                      <img
-                        src={
-                          property.imageUrls?.[0] ||
-                          property.imageUrl ||
-                          "https://via.placeholder.com/150"
-                        }
-                        alt={property.title}
-                        className="w-full h-full object-cover"
-                      />
-                      {property.imageUrls?.length > 1 && (
-                        <div
-                          className={`absolute bottom-2 right-2 ${
-                            darkMode
-                              ? "bg-gray-800 bg-opacity-75"
-                              : "bg-black bg-opacity-50"
-                          } text-white text-xs px-2 py-1 rounded`}
-                        >
-                          {property.imageUrls.length} photos
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <img
-                      src="https://via.placeholder.com/150"
-                      alt="Placeholder"
-                      className="w-full h-full object-cover"
-                    />
-                  )}
-                </div>
+          filteredProperties.map((property) => {
+            // Normalize image URLs
+            const imageUrls = property.imageUrls || [];
+            const primaryImageUrl = property.primaryImageUrl;
+            const displayImageUrl =
+              primaryImageUrl || (imageUrls.length > 0 ? imageUrls[0] : null);
+            const finalImageUrl = displayImageUrl
+              ? displayImageUrl.startsWith("http")
+                ? displayImageUrl
+                : `${landlordApi.baseUrl}${displayImageUrl}`
+              : null;
 
-                {/* Property Details */}
-                <div className="flex-1">
-                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start">
-                    <div>
-                      <h3
-                        className={`text-base sm:text-lg font-semibold ${
-                          darkMode ? "text-gray-200" : "text-gray-800"
-                        }`}
-                      >
-                        {property.title}
-                      </h3>
-                      <p
-                        className={`text-${
-                          darkMode ? "gray-400" : "gray-600"
-                        } text-xs sm:text-sm mt-1`}
-                      >
-                        {property.description}
-                      </p>
-                    </div>
-                    <div className="flex space-x-2 mt-2 sm:mt-0">
-                      <Button
-                        variant="icon"
-                        onClick={() => handleEditProperty(property)}
-                        className={darkMode ? "text-gray-400" : "text-gray-500"}
-                        aria-label="Edit property"
-                      >
-                        <FaEdit className="text-base sm:text-lg" />
-                      </Button>
-                      <Button
-                        variant="icon"
-                        onClick={() => handleDeleteProperty(property.id)}
-                        className={darkMode ? "text-gray-400" : "text-gray-500"}
-                        aria-label="Delete property"
-                      >
-                        <FaTrash className="text-base sm:text-lg" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Property Info */}
-                  <div
-                    className={`mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs sm:text-sm ${
-                      darkMode ? "text-gray-400" : "text-gray-600"
-                    }`}
-                  >
-                    <div className="flex items-center">
-                      <FaMapMarkerAlt
-                        className={`mr-2 ${
-                          darkMode ? "text-blue-400" : "text-blue-500"
-                        }`}
-                      />
-                      <span>{property.location}</span>
-                    </div>
-                    <div className="flex items-center">
-                      <FaMoneyBillWave
-                        className={`mr-2 ${
-                          darkMode ? "text-green-400" : "text-green-500"
-                        }`}
-                      />
-                      <span>
-                        {property.currency}
-                        {property.price}/mo
-                      </span>
-                    </div>
-                    <div className="flex items-center">
-                      <FaBed
-                        className={`mr-2 ${
-                          darkMode ? "text-blue-400" : "text-blue-500"
-                        }`}
-                      />
-                      <span>{property.bedrooms} Bedrooms</span>
-                    </div>
-                    <div className="flex items-center">
-                      <FaBath
-                        className={`mr-2 ${
-                          darkMode ? "text-blue-400" : "text-blue-500"
-                        }`}
-                      />
-                      <span>{property.bathrooms} Bathrooms</span>
-                    </div>
-                  </div>
-
-                  {/* Amenities */}
-                  {property.amenities?.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {property.amenities.map((amenity, index) => (
-                        <span
-                          key={index}
-                          className={`bg-${
-                            darkMode ? "gray-700" : "blue-100"
-                          } text-${
-                            darkMode ? "gray-200" : "blue-800"
-                          } text-xs px-2 py-1 rounded-full`}
-                        >
-                          {amenity}
+            return (
+              <div
+                key={property._id} // Use _id instead of id
+                className={`bg-${
+                  darkMode ? "gray-800" : "white"
+                } rounded-lg shadow-md p-4 sm:p-5 transition-all duration-300 hover:shadow-lg ${
+                  property.status === "Active"
+                    ? "border-l-4 border-green-500"
+                    : property.status === "Vacant"
+                    ? "border-l-4 border-yellow-500"
+                    : property.status === "Under Maintenance"
+                    ? "border-l-4 border-red-500"
+                    : "border-l-4 border-gray-300"
+                }`}
+              >
+                <div className="flex flex-col sm:flex-row sm:space-x-4">
+                  {/* Image Carousel */}
+                  <div className="w-full sm:w-48 h-48 sm:h-40 rounded-lg overflow-hidden mb-3 sm:mb-0">
+                    {finalImageUrl ? (
+                      <div className="relative w-full h-full">
+                        <img
+                          src={finalImageUrl}
+                          alt={property.title}
+                          className="w-full h-full object-cover"
+                          onError={(e) =>
+                            (e.target.outerHTML =
+                              '<div className="w-full h-full bg-gray-200 rounded-lg flex items-center justify-center"><span className="text-gray-500">No image available</span></div>')
+                          }
+                        />
+                        {imageUrls.length > 1 && (
+                          <div
+                            className={`absolute bottom-2 right-2 ${
+                              darkMode
+                                ? "bg-gray-800 bg-opacity-75"
+                                : "bg-black bg-opacity-50"
+                            } text-white text-xs px-2 py-1 rounded`}
+                          >
+                            {imageUrls.length} photos
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="w-full h-full bg-gray-200 rounded-lg flex items-center justify-center">
+                        <span className="text-gray-500">
+                          No image available
                         </span>
-                      ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Property Details */}
+                  <div className="flex-1">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start">
+                      <div>
+                        <h3
+                          className={`text-base sm:text-lg font-semibold ${
+                            darkMode ? "text-gray-200" : "text-gray-800"
+                          }`}
+                        >
+                          {property.title}
+                        </h3>
+                        <p
+                          className={`text-${
+                            darkMode ? "gray-400" : "gray-600"
+                          } text-xs sm:text-sm mt-1`}
+                        >
+                          {property.description}
+                        </p>
+                      </div>
+                      <div className="flex space-x-2 mt-2 sm:mt-0">
+                        <Button
+                          variant="icon"
+                          onClick={() => handleEditProperty(property)}
+                          className={
+                            darkMode ? "text-gray-400" : "text-gray-500"
+                          }
+                          aria-label="Edit property"
+                        >
+                          <FaEdit className="text-base sm:text-lg" />
+                        </Button>
+                        <Button
+                          variant="icon"
+                          onClick={() => handleDeleteProperty(property._id)} // Use _id
+                          className={
+                            darkMode ? "text-gray-400" : "text-gray-500"
+                          }
+                          aria-label="Delete property"
+                        >
+                          <FaTrash className="text-base sm:text-lg" />
+                        </Button>
+                      </div>
                     </div>
-                  )}
+
+                    {/* Property Info */}
+                    <div
+                      className={`mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs sm:text-sm ${
+                        darkMode ? "text-gray-400" : "text-gray-600"
+                      }`}
+                    >
+                      <div className="flex items-center">
+                        <FaMapMarkerAlt
+                          className={`mr-2 ${
+                            darkMode ? "text-blue-400" : "text-blue-500"
+                          }`}
+                        />
+                        <span>{property.location}</span>
+                      </div>
+                      <div className="flex items-center">
+                        <FaMoneyBillWave
+                          className={`mr-2 ${
+                            darkMode ? "text-green-400" : "text-green-500"
+                          }`}
+                        />
+                        <span>
+                          {property.currency}
+                          {property.price}/mo
+                        </span>
+                      </div>
+                      <div className="flex items-center">
+                        <FaBed
+                          className={`mr-2 ${
+                            darkMode ? "text-blue-400" : "text-blue-500"
+                          }`}
+                        />
+                        <span>
+                          {property.bedrooms}{" "}
+                          {property.isSharedBedrooms
+                            ? "Shared Bedrooms"
+                            : "Bedrooms"}
+                        </span>
+                      </div>
+                      <div className="flex items-center">
+                        <FaBath
+                          className={`mr-2 ${
+                            darkMode ? "text-blue-400" : "text-blue-500"
+                          }`}
+                        />
+                        <span>
+                          {property.bathrooms}{" "}
+                          {property.isSharedBathrooms
+                            ? "Shared Bathrooms"
+                            : "Bathrooms"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Amenities */}
+                    {property.amenities?.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {property.amenities.map((amenity, index) => (
+                          <span
+                            key={index}
+                            className={`bg-${
+                              darkMode ? "gray-700" : "blue-100"
+                            } text-${
+                              darkMode ? "text-gray-200" : "text-blue-800"
+                            } text-xs px-2 py-1 rounded-full`}
+                          >
+                            {amenity}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         ) : (
           <div
             className={`bg-${

@@ -4,26 +4,41 @@ import { FaGoogle } from "react-icons/fa";
 import TenantImage from "../../assets/Tenants.jpg";
 import { jwtDecode } from "jwt-decode";
 import { BASE_URL } from "../../config";
-import { useDarkMode } from "../../context/DarkModeContext"; // Fixed import
+import { useDarkMode } from "../../context/DarkModeContext";
+import { useUser } from "../../context/useUser"; // Import useUser to access login function
 import Button from "../../components/Button";
 
+/**
+ * TenantLogin component handles the login functionality for tenants.
+ * It submits email and password to the backend, stores the received JWT token,
+ * and redirects to the appropriate dashboard based on the user's role.
+ */
 const TenantLogin = () => {
-  const { darkMode } = useDarkMode();
-  const navigate = useNavigate();
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const { darkMode } = useDarkMode(); // Access dark mode state from context
+  const { login } = useUser(); // Access login function from UserContext to handle token
+  const navigate = useNavigate(); // Hook for programmatic navigation
+  const [error, setError] = useState(""); // State for error messages
+  const [loading, setLoading] = useState(false); // State for loading indicator
 
+  /**
+   * Handles the login form submission.
+   * Sends a POST request to the backend's login endpoint with email and password.
+   * Uses the UserContext login function to store the token and redirect based on role.
+   * @param {Event} e - The form submission event
+   */
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
+    // Prepare form data for the login request
     const formData = {
       email: e.target.email.value,
       password: e.target.password.value,
     };
 
     try {
+      // Send POST request to the backend login endpoint
       const response = await fetch(`${BASE_URL}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -33,9 +48,10 @@ const TenantLogin = () => {
       console.log("Response status:", response.status);
       console.log("Response headers:", response.headers.get("Content-Type"));
 
+      // Check if the response is not OK (e.g., 401, 400)
       if (!response.ok) {
         const contentType = response.headers.get("Content-Type");
-        let errorMessage = "Login failed";
+        let errorMessage = "Invalid email or password. Please try again.";
         if (contentType && contentType.includes("application/json")) {
           const errorData = await response.json();
           errorMessage = errorData.error || errorMessage;
@@ -46,24 +62,28 @@ const TenantLogin = () => {
         throw new Error(errorMessage);
       }
 
+      // Verify the response is in JSON format
       const contentType = response.headers.get("Content-Type");
       if (!contentType || !contentType.includes("application/json")) {
-        throw new Error("Invalid response format: Expected JSON");
+        throw new Error("Something went wrong. Please try again later.");
       }
 
+      // Parse the response body
       const text = await response.text();
       if (!text) {
-        throw new Error("Empty response from server");
+        throw new Error("Something went wrong. Please try again later.");
       }
 
       const data = JSON.parse(text);
       console.log("Login response:", data);
 
+      // Extract the JWT token from the response
       const token = data.token;
       if (token) {
-        localStorage.setItem("token", token);
-        console.log("Token stored:", token);
+        // Use the login function from UserContext to handle token and update user state
+        login(token);
 
+        // Decode the token to extract the role
         let role = "TENANT";
         try {
           const decodedToken = jwtDecode(token);
@@ -76,25 +96,25 @@ const TenantLogin = () => {
           console.warn("Failed to decode token:", decodeError.message);
         }
 
+        // Redirect based on the user's role
         if (role === "LANDLORD") {
           navigate("/dashboard/landlord");
         } else if (role === "TENANT") {
           navigate("/dashboard/tenant");
         } else {
-          setError("Unknown user role");
+          setError("Unable to determine user role. Please contact support.");
         }
       } else {
-        setError("No token received from server");
+        setError("Authentication failed. Please try again.");
       }
     } catch (err) {
+      // Handle network errors (e.g., server down)
       if (err.message.includes("Failed to fetch")) {
-        const corsMessage =
-          "This may be due to a CORS issue. Ensure the backend allows requests from 'http://192.168.0.192:5173'.";
         setError(
-          `Unable to connect to the server. Please check your network or try again later. ${corsMessage}`
+          "Unable to connect to the server. Please check your internet connection and try again."
         );
       } else {
-        setError(err.message || "An error occurred during login");
+        setError(err.message || "An error occurred. Please try again.");
       }
       console.error("Login error:", err);
     } finally {
@@ -102,12 +122,14 @@ const TenantLogin = () => {
     }
   };
 
+  // Render the login page
   return (
     <div
       className={`flex h-screen ${
         darkMode ? "bg-gray-900 text-gray-200" : "bg-white text-gray-900"
       }`}
     >
+      {/* Left Section: Decorative Image (Visible on large screens) */}
       <div className="hidden lg:flex w-1/2 relative">
         <img
           src={TenantImage}
@@ -132,6 +154,7 @@ const TenantLogin = () => {
         </div>
       </div>
 
+      {/* Right Section: Login Form */}
       <div
         className={`w-full lg:w-1/2 flex flex-col justify-center items-center p-8 ${
           darkMode ? "bg-gray-900" : "bg-white"
@@ -145,6 +168,7 @@ const TenantLogin = () => {
           Tenant Login
         </h2>
 
+        {/* Error Message Display */}
         {error && (
           <div
             className={`w-full max-w-md mb-4 p-3 rounded-md ${
@@ -157,6 +181,7 @@ const TenantLogin = () => {
           </div>
         )}
 
+        {/* Login Form */}
         <form className="w-full max-w-md space-y-4" onSubmit={handleLogin}>
           <input
             type="email"
@@ -197,6 +222,7 @@ const TenantLogin = () => {
             {loading ? <span className="loader w-5 h-5"></span> : "Login"}
           </Button>
 
+          {/* Divider for alternative login options */}
           <div className="flex items-center justify-center gap-2">
             <div
               className={`border-b ${
@@ -217,6 +243,7 @@ const TenantLogin = () => {
             ></div>
           </div>
 
+          {/* Google Sign-In Button (Disabled) */}
           <Button
             variant="secondary"
             type="button"
@@ -229,6 +256,7 @@ const TenantLogin = () => {
             Sign in with Google
           </Button>
 
+          {/* Link to Sign Up */}
           <p
             className={`text-sm text-center ${
               darkMode ? "text-gray-400" : "text-gray-600"

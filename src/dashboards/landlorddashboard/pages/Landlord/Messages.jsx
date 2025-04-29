@@ -12,12 +12,12 @@ import GlobalSkeleton from "../../../../components/GlobalSkeleton";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
 import Button from "../../../../components/Button";
 import { useDarkMode } from "../../../../context/DarkModeContext";
-import landlordApi from "../../../../api/landlord";
+import landlordApi from "../../../../api/landlordApi";
 
 /**
  * LandlordMessages Component
  *
- * Displays a paginated list of messages for the landlord, with a search bar and filter options (All, Unread, Read).
+ * Displays a paginated list of messages for the landlord, with a serach bar and filter options (All, Unread, Read).
  * Fetches message data using react-query for better state management and caching.
  * Features:
  * - Skeleton loader with a minimum 2-second display for UX consistency.
@@ -26,7 +26,7 @@ import landlordApi from "../../../../api/landlord";
  * - Filter messages by read/unread status.
  * - "Mark as Read/Unread" toggle for each message.
  * - Pagination with 10 messages per page.
- * - Modal for composing and replying to messages.
+ * - Modal for composing and replying to messages, with dropdowns to select tenant and property.
  * - Consistent error handling with ErrorDisplay and toast notifications.
  */
 const LandlordMessages = () => {
@@ -40,18 +40,77 @@ const LandlordMessages = () => {
   const [modalType, setModalType] = useState("compose"); // "compose" or "reply"
   const [modalMessage, setModalMessage] = useState(""); // Message content in modal
   const [selectedMessage, setSelectedMessage] = useState(null); // Message being replied to
+  const [selectedPropertyId, setSelectedPropertyId] = useState(""); // Selected property for composing message
+  const [selectedTenantId, setSelectedTenantId] = useState(""); // Selected tenant for composing message
 
   // Fetch messages using react-query
   const {
     data: messages = [],
-    error,
+    error: messagesError,
     isLoading: messagesLoading,
-    refetch,
+    refetch: refetchMessages,
   } = useQuery({
     queryKey: ["landlordMessages"],
     queryFn: () => landlordApi.fetchMessages(localStorage.getItem("token")),
     enabled: !!localStorage.getItem("token"),
+    onError: (error) => {
+      console.error("[LandlordMessages] Fetch messages error:", error);
+    },
+    retry: 1,
+    retryDelay: 2000,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    cacheTime: 15 * 60 * 1000, // 15 minutes
+    refetchOnWindowFocus: false, // Prevent bounces
   });
+
+  // Fetch properties for the dropdown in the compose modal
+  const {
+    data: properties = [],
+    error: propertiesError,
+    isLoading: propertiesLoading,
+  } = useQuery({
+    queryKey: ["landlordProperties"],
+    queryFn: () => landlordApi.fetchProperties(localStorage.getItem("token")),
+    enabled: !!localStorage.getItem("token"),
+    onError: (error) => {
+      console.error("[LandlordMessages] Fetch properties error:", error);
+    },
+    retry: 1,
+    retryDelay: 2000,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    cacheTime: 15 * 60 * 1000, // 15 minutes
+    refetchOnWindowFocus: false, // Prevent bounces
+  });
+
+  // Fetch leases to get tenant information for the selected property
+  const {
+    data: leases = [],
+    error: leasesError,
+    isLoading: leasesLoading,
+  } = useQuery({
+    queryKey: ["landlordLeases", selectedPropertyId],
+    queryFn: () => landlordApi.fetchLeases(localStorage.getItem("token")),
+    enabled: !!localStorage.getItem("token") && !!selectedPropertyId,
+    onError: (error) => {
+      console.error("[LandlordMessages] Fetch leases error:", error);
+    },
+    retry: 1,
+    retryDelay: 2000,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    cacheTime: 15 * 60 * 1000, // 15 minutes
+    refetchOnWindowFocus: false, // Prevent bounces
+  });
+
+  // Filter tenants based on the selected property
+  const tenants = useMemo(() => {
+    if (!selectedPropertyId) return [];
+    return leases
+      .filter((lease) => lease.propertyId === selectedPropertyId)
+      .map((lease) => ({
+        id: lease.tenantId,
+        name: lease.tenantName || "Unknown Tenant",
+      }));
+  }, [leases, selectedPropertyId]);
 
   // Mutation to mark message as read/unread
   const markMessageMutation = useMutation({
@@ -62,7 +121,7 @@ const LandlordMessages = () => {
         isRead
       ),
     onMutate: async ({ messageId, isRead }) => {
-      // Optimistic update
+      // Optimistic update: Update the local messages state before the server responds
       const previousMessages = messages;
       const updatedMessages = messages.map((msg) =>
         msg.id === messageId ? { ...msg, isRead } : msg
@@ -76,7 +135,7 @@ const LandlordMessages = () => {
     },
     onSuccess: () => {
       toast.success("Message status updated!");
-      refetch(); // Refetch to ensure consistency
+      refetchMessages(); // Refetch to ensure consistency
     },
   });
 
@@ -91,7 +150,7 @@ const LandlordMessages = () => {
       }),
     onSuccess: () => {
       toast.success("Message sent successfully!");
-      refetch(); // Refetch messages
+      refetchMessages(); // Refetch messages
       closeModal();
     },
     onError: (err) => {
@@ -108,11 +167,11 @@ const LandlordMessages = () => {
 
   // Ensure minimum 2-second loading for UX consistency
   useEffect(() => {
-    if (!messagesLoading) {
+    if (!messagesLoading && !propertiesLoading && !leasesLoading) {
       const timer = setTimeout(() => setLoading(false), 2000);
       return () => clearTimeout(timer);
     }
-  }, [messagesLoading]);
+  }, [messagesLoading, propertiesLoading, leasesLoading]);
 
   // Memoized filtered messages
   const filteredMessages = useMemo(() => {
@@ -130,8 +189,8 @@ const LandlordMessages = () => {
       const query = searchQuery.toLowerCase();
       result = result.filter(
         (message) =>
-          message.sender.toLowerCase().includes(query) ||
-          message.property.title.toLowerCase().includes(query)
+          (message.sender?.toLowerCase() || "").includes(query) ||
+          (message.property?.title?.toLowerCase() || "").includes(query)
       );
     }
 
@@ -156,6 +215,8 @@ const LandlordMessages = () => {
     setModalType("compose");
     setModalMessage("");
     setSelectedMessage(null);
+    setSelectedPropertyId("");
+    setSelectedTenantId("");
     setModalOpen(true);
   };
 
@@ -163,6 +224,9 @@ const LandlordMessages = () => {
     setModalType("reply");
     setModalMessage("");
     setSelectedMessage(message);
+    // Pre-fill the property and tenant for replies
+    setSelectedPropertyId(message.property.id);
+    setSelectedTenantId(message.senderId);
     setModalOpen(true);
   };
 
@@ -170,6 +234,8 @@ const LandlordMessages = () => {
     setModalOpen(false);
     setModalMessage("");
     setSelectedMessage(null);
+    setSelectedPropertyId("");
+    setSelectedTenantId("");
   };
 
   const handleSendMessage = () => {
@@ -177,25 +243,30 @@ const LandlordMessages = () => {
       toast.error("Message content cannot be empty.");
       return;
     }
+    if (modalType === "compose" && (!selectedPropertyId || !selectedTenantId)) {
+      toast.error("Please select a property and tenant.");
+      return;
+    }
 
     if (modalType === "compose") {
-      // For simplicity, assume recipientId and propertyId are selected elsewhere
-      // In a real app, you'd have a dropdown or input for these
       sendMessageMutation.mutate({
         content: modalMessage,
-        recipientId: "tenant-id-placeholder", // Replace with actual recipient ID
-        propertyId: "property-id-placeholder", // Replace with actual property ID
+        recipientId: selectedTenantId, // Tenant ID selected from dropdown
+        propertyId: selectedPropertyId, // Property ID selected from dropdown
         replyToId: null,
       });
     } else if (modalType === "reply" && selectedMessage) {
       sendMessageMutation.mutate({
         content: modalMessage,
-        recipientId: selectedMessage.senderId, // Assumed field
-        propertyId: selectedMessage.property.id, // Assumed field
+        recipientId: selectedMessage.senderId, // Tenant ID from the original message
+        propertyId: selectedMessage.property.id, // Property ID from the original message
         replyToId: selectedMessage.id,
       });
     }
   };
+
+  // Combine errors for display
+  const combinedError = messagesError || propertiesError || leasesError;
 
   if (loading) {
     return (
@@ -211,20 +282,20 @@ const LandlordMessages = () => {
     );
   }
 
-  if (error) {
+  if (combinedError) {
     return (
       <div className="flex h-screen">
         <div className="p-6 w-full">
           <div className="flex flex-col items-center justify-center h-full space-y-4">
             <ErrorDisplay
-              error={error}
+              error={combinedError}
               className={darkMode ? "text-red-400" : "text-red-500"}
             />
             <Button
               variant="primary"
               onClick={() => {
                 setLoading(true);
-                refetch();
+                refetchMessages();
               }}
               className="text-sm sm:text-base"
             >
@@ -356,11 +427,11 @@ const LandlordMessages = () => {
                   {/* Property Image */}
                   <img
                     src={
-                      message.property.imageUrl
+                      message.property?.imageUrl
                         ? `${landlordApi.baseUrl}${message.property.imageUrl}`
                         : "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=40&h=40&fit=crop"
                     }
-                    alt={message.property.title}
+                    alt={message.property?.title || "Property"}
                     className="w-10 h-10 md:w-12 md:h-12 rounded-full mr-3 md:mr-4"
                     onError={(e) =>
                       (e.target.src =
@@ -370,7 +441,7 @@ const LandlordMessages = () => {
                   <div className="flex-1">
                     {/* Property Title */}
                     <p className="font-semibold text-sm md:text-base leading-tight">
-                      {message.property.title}
+                      {message.property?.title || "Unknown Property"}
                     </p>
                     {/* Message Preview */}
                     <p
@@ -378,14 +449,17 @@ const LandlordMessages = () => {
                         darkMode ? "text-gray-400" : "text-gray-500"
                       }`}
                     >
-                      {message.sender}: {message.content.substring(0, 50)}...
+                      {message.sender || "Unknown Sender"}:{" "}
+                      {(message.content || "").substring(0, 50)}...
                     </p>
                     <p
                       className={`text-xs ${
                         darkMode ? "text-gray-500" : "text-gray-600"
                       }`}
                     >
-                      {new Date(message.date).toLocaleString()}
+                      {message.date
+                        ? new Date(message.date).toLocaleString()
+                        : "Unknown Date"}
                     </p>
                   </div>
                 </div>
@@ -396,8 +470,12 @@ const LandlordMessages = () => {
                     className="flex items-center text-sm md:text-base"
                     aria-label={
                       message.isRead
-                        ? `Mark message from ${message.sender} as unread`
-                        : `Mark message from ${message.sender} as read`
+                        ? `Mark message from ${
+                            message.sender || "sender"
+                          } as unread`
+                        : `Mark message from ${
+                            message.sender || "sender"
+                          } as read`
                     }
                   >
                     {message.isRead ? (
@@ -477,9 +555,82 @@ const LandlordMessages = () => {
                   darkMode ? "text-gray-400" : "text-gray-600"
                 }`}
               >
-                Replying to {selectedMessage.sender} about{" "}
-                {selectedMessage.property.title}
+                Replying to {selectedMessage.sender || "sender"} about{" "}
+                {selectedMessage.property?.title || "property"}
               </p>
+            )}
+            {modalType === "compose" && (
+              <>
+                {/* Property Dropdown */}
+                <div className="mb-4">
+                  <label
+                    htmlFor="property-select"
+                    className="block text-sm font-medium mb-1"
+                  >
+                    Select Property
+                  </label>
+                  <select
+                    id="property-select"
+                    value={selectedPropertyId}
+                    onChange={(e) => {
+                      setSelectedPropertyId(e.target.value);
+                      setSelectedTenantId(""); // Reset tenant selection when property changes
+                    }}
+                    className={`w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      darkMode
+                        ? "border-gray-600 bg-gray-700 text-gray-200"
+                        : "border-gray-300 bg-white text-gray-800"
+                    }`}
+                    disabled={propertiesLoading}
+                  >
+                    <option value="">Select a property</option>
+                    {properties.map((property) => (
+                      <option key={property.id} value={property.id}>
+                        {property.title || "Untitled Property"}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Tenant Dropdown */}
+                <div className="mb-4">
+                  <label
+                    htmlFor="tenant-select"
+                    className="block text-sm font-medium mb-1"
+                  >
+                    Select Tenant
+                  </label>
+                  <select
+                    id="tenant-select"
+                    value={selectedTenantId}
+                    onChange={(e) => setSelectedTenantId(e.target.value)}
+                    className={`w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      darkMode
+                        ? "border-gray-600 bg-gray-700 text-gray-200"
+                        : "border-gray-300 bg-white text-gray-800"
+                    }`}
+                    disabled={
+                      !selectedPropertyId ||
+                      leasesLoading ||
+                      tenants.length === 0
+                    }
+                  >
+                    <option value="">Select a tenant</option>
+                    {tenants.map((tenant) => (
+                      <option key={tenant.id} value={tenant.id}>
+                        {tenant.name}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedPropertyId &&
+                    tenants.length === 0 &&
+                    !leasesLoading && (
+                      <p className="text-xs text-red-500 mt-1">
+                        No tenants found for this property.
+                      </p>
+                    )}
+                </div>
+              </>
             )}
             <textarea
               value={modalMessage}

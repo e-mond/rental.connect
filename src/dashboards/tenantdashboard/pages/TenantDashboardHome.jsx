@@ -19,6 +19,12 @@ const TenantDashboardHome = () => {
   const navigate = useNavigate();
   const { darkMode } = useDarkMode(); // Access dark mode state
 
+  const userName =
+    user?.fullName ||
+    `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
+    user?.name ||
+    "Tenant";
+
   useEffect(() => {
     if (!contextLoading) {
       const timer = setTimeout(() => {
@@ -91,9 +97,9 @@ const TenantDashboardHome = () => {
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 18) return "Good afternoon";
-    return "Good evening";
+    if (hour < 12) return "Good Morning";
+    if (hour < 18) return "Good Afternoon";
+    return "Good Evening";
   };
 
   if (contextLoading) {
@@ -121,7 +127,7 @@ const TenantDashboardHome = () => {
       <h2 className="text-xl sm:text-2xl font-bold mb-6">
         {getGreeting()},{" "}
         <span className={darkMode ? "text-teal-400" : "text-blue-600"}>
-          {user?.name || "Tenant"}
+          {userName}
         </span>
         !
       </h2>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Outlet, Navigate } from "react-router-dom";
-import { useUser } from "../../context/UserContext"; // Updated import
+import { useUser } from "../../context/useUser"; // Correct import for user context
 import { useDarkMode } from "../../context/DarkModeContext"; // Updated import for consistency
 import Sidebar from "./components/TenantSidebar";
 import GlobalSkeleton from "../../components/GlobalSkeleton";
@@ -30,6 +30,11 @@ const TenantDashboard = () => {
 
   if (!user) {
     return <Navigate to="/tenantlogin" replace />;
+  }
+
+  // Role check: Ensure only users with role TENANT can access this dashboard
+  if (user.role !== "TENANT") {
+    return <Navigate to={user.role === "LANDLORD" ? "/dashboard/landlord" : "/"} replace />;
   }
 
   return (

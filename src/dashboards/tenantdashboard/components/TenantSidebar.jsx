@@ -52,7 +52,7 @@ const TenantSidebar = ({ isOpen, setIsOpen, user, isLoading }) => {
   const menuItems = [
     {
       name: "Dashboard",
-      path: `${DASHBOARD_BASE_URL}/dashboard/tenant`,
+      path: `${DASHBOARD_BASE_URL}/tenant`,
       icon: HomeIcon,
     },
     {

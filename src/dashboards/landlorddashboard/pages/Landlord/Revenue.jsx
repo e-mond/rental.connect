@@ -8,7 +8,7 @@ import { useDarkMode } from "../../../../context/DarkModeContext";
 import Button from "../../../../components/Button";
 import GlobalSkeleton from "../../../../components/GlobalSkeleton";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
-import landlordApi from "../../../../api/landlord";
+import landlordApi from "../../../../api/landlordApi";
 
 const Revenue = () => {
   const { darkMode } = useDarkMode();

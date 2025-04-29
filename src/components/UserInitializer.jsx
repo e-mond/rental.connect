@@ -1,52 +1,55 @@
 import { useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useUser } from "../context/UserContext";
+import { useUser } from "../context/useUser"; // Fix import path
+import { jwtDecode } from "jwt-decode";
 
+/**
+ * Initializes the user session by checking for a JWT token in localStorage.
+ * Updates the user state and handles navigation based on authentication status.
+ */
 export function UserInitializer() {
   const { user, loading, error, setUser, setLoading } = useUser();
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    // Check for token on page load and set user if token exists
     const initializeUser = async () => {
       const token = localStorage.getItem("token");
       if (token && !user) {
         try {
           setLoading(true);
-          // Decode the token to extract user details
-          const payload = JSON.parse(atob(token.split(".")[1]));
-          const role = payload.role;
-          const exp = payload.exp * 1000; // Convert to milliseconds
+          const decoded = jwtDecode(token);
+          const exp = decoded.exp * 1000;
           const now = Date.now();
 
           if (now > exp) {
-            // Token expired, clear it and redirect to login
+            console.log("Token expired, clearing and redirecting to login");
             localStorage.removeItem("token");
             setUser(null);
-            navigate("/landlordlogin");
+            navigate(`/${decoded.role.toLowerCase()}login`);
             return;
           }
 
-          // Set user in context
           setUser({
-            email: payload.sub,
-            role: role,
-            id: payload.id,
+            email: decoded.sub,
+            role: decoded.role,
+            userId: decoded.userId,
           });
         } catch (err) {
-          console.error("Failed to decode token:", err);
+          console.error("Failed to decode token:", err.message);
           localStorage.removeItem("token");
           setUser(null);
           navigate("/landlordlogin");
         } finally {
           setLoading(false);
         }
+      } else {
+        setLoading(false);
       }
     };
 
     initializeUser();
-  }, [setUser, setLoading, navigate]);
+  }, [user, setUser, setLoading, navigate]);
 
   useEffect(() => {
     console.log("UserInitializer state:", {
@@ -56,7 +59,6 @@ export function UserInitializer() {
       pathname: location.pathname,
     });
 
-    // Define public routes that don't require login
     const publicRoutes = [
       "/",
       "/about",
@@ -67,10 +69,10 @@ export function UserInitializer() {
       "/auth/tenant",
       "/auth/landlord",
       "/landlord-signup",
-      // Removed /dashboard routes as they should be protected
+      "/account-success/tenant",
+      "/account-success/landlord",
     ];
 
-    // Check if the current path is a public route
     const isPublicRoute = publicRoutes.some(
       (route) =>
         location.pathname === route || location.pathname.startsWith(route)
@@ -83,22 +85,17 @@ export function UserInitializer() {
 
     if (!loading) {
       if (error || !user) {
-        // Skip redirect for public routes
         if (isPublicRoute) {
           console.log("Public route, no redirect needed");
           return;
         }
 
-        // Redirect to appropriate login page based on the attempted route
-        if (location.pathname.startsWith("/dashboard/landlord")) {
-          console.log("Redirecting to landlord login");
-          navigate("/landlordlogin");
-        } else {
-          console.log("No user or error occurred, redirecting to tenant login");
-          navigate("/tenantlogin");
-        }
+        const redirectPath = location.pathname.includes("tenant")
+          ? "/tenantlogin"
+          : "/landlordlogin";
+        console.log(`No user or error occurred, redirecting to ${redirectPath}`);
+        navigate(redirectPath);
       } else {
-        // Redirect logged-in users to their respective dashboards
         if (
           user.role === "TENANT" &&
           !location.pathname.startsWith("/dashboard/tenant") &&

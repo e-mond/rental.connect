@@ -1,7 +1,7 @@
 import { useDarkMode } from "../../../../../context/DarkModeContext";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import landlordApi from "../../../../../api/landlord";
+import landlordApi from "../../../../../api/landlordApi";
 import Button from "../../../../../components/Button";
 import GlobalSkeleton from "../../../../../components/GlobalSkeleton";
 import ErrorDisplay from "../../../../../components/ErrorDisplay";

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query"; 
+import { useQuery } from "@tanstack/react-query";
 import {
   Search,
   PlusCircle,
@@ -10,8 +10,8 @@ import {
 } from "lucide-react";
 import GlobalSkeleton from "../../../../components/GlobalSkeleton";
 import Button from "../../../../components/Button";
-import landlordApi from "../../../../api/landlord"; 
-import { useDarkMode } from "../../../../context/DarkModeContext"; 
+import landlordApi from "../../../../api/landlordApi";
+import { useDarkMode } from "../../../../context/DarkModeContext";
 
 /**
  * Maintenance Component
@@ -26,16 +26,11 @@ import { useDarkMode } from "../../../../context/DarkModeContext";
  * - Verifies BASE_URL usage in API calls via landlordApi.
  */
 const Maintenance = () => {
-  const { darkMode } = useDarkMode(); // Access dark mode state
+  const { darkMode } = useDarkMode();
   const navigate = useNavigate();
 
-  // State for the search input to filter requests by type or address
   const [searchTerm, setSearchTerm] = useState("");
-
-  // State for the selected filter tab (All Requests, Open, In Progress, Completed)
   const [filterStatus, setFilterStatus] = useState("All Requests");
-
-  // State to control the skeleton loading delay
   const [loading, setLoading] = useState(true);
 
   // Fetch maintenance requests using react-query
@@ -46,9 +41,21 @@ const Maintenance = () => {
     refetch,
   } = useQuery({
     queryKey: ["maintenanceRequests"],
-    queryFn: () =>
-      landlordApi.fetchMaintenanceRequests(localStorage.getItem("token")),
+    queryFn: async () => {
+      const token = localStorage.getItem("token");
+      const response = await landlordApi.fetchMaintenanceRequests(token);
+      console.log("[Maintenance] Fetched maintenance requests:", response);
+      return response;
+    },
     enabled: !!localStorage.getItem("token"),
+    onError: (error) => {
+      console.error("[Maintenance] Fetch error:", error);
+    },
+    retry: 1,
+    retryDelay: 2000,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    cacheTime: 15 * 60 * 1000, // 15 minutes
+    refetchOnWindowFocus: false, // Prevent bounces
   });
 
   // Ensure minimum 2-second loading for UX consistency
@@ -62,8 +69,8 @@ const Maintenance = () => {
   // Filter requests based on search term and status
   const filteredRequests = maintenanceRequests.filter((request) => {
     const matchesSearch =
-      request.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      request.address.toLowerCase().includes(searchTerm.toLowerCase());
+      (request.type?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+      (request.address?.toLowerCase() || "").includes(searchTerm.toLowerCase());
 
     const matchesFilter =
       filterStatus === "All Requests" ||
@@ -257,18 +264,19 @@ const Maintenance = () => {
                   }`}
                   aria-hidden="true"
                 >
-                  {request.icon}
+                  {request.icon || "🔧"} {/* Fallback icon if none provided */}
                 </span>
                 <div>
                   <h3 className="font-medium text-sm sm:text-base">
-                    {request.type} - {request.address}
+                    {request.type || "Unknown Type"} -{" "}
+                    {request.address || "Unknown Address"}
                   </h3>
                   <p
                     className={`text-xs sm:text-sm ${
                       darkMode ? "text-gray-400" : "text-gray-500"
                     }`}
                   >
-                    {request.details}
+                    {request.details || "No details provided"}
                   </p>
                   {request.scheduledDate && (
                     <p
@@ -309,7 +317,9 @@ const Maintenance = () => {
                 <Button
                   variant="secondary"
                   className="text-xs sm:text-sm"
-                  aria-label={`Select options for ${request.type} at ${request.address}`}
+                  aria-label={`Select options for ${
+                    request.type || "maintenance"
+                  } at ${request.address || "this address"}`}
                 >
                   Select ▼
                 </Button>

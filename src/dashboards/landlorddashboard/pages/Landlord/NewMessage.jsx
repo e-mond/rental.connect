@@ -5,7 +5,7 @@ import { ArrowLeft, Send } from "lucide-react";
 import Button from "../../../../components/Button";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
 import { useDarkMode } from "../../../../context/DarkModeContext"; 
-import landlordApi from "../../../../api/landlord";
+import landlordApi from "../../../../api/landlordApi";
 
 /**
  * NewMessage Component
