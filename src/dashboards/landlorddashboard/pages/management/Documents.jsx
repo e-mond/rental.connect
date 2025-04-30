@@ -5,7 +5,7 @@ import { Card, CardContent } from "../../../../components/Card";
 import Button from "../../../../components/Button";
 import GlobalSkeleton from "../../../../components/GlobalSkeleton";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
-import landlordApi from "../../../../api/landlord";
+import landlordApi from "../../../../api/landlordApi";
 import {
   FaFileAlt,
   FaCloudUploadAlt,
@@ -14,7 +14,7 @@ import {
   FaTrash,
 } from "react-icons/fa";
 import { MdGavel, MdDescription } from "react-icons/md";
-import { useDarkMode } from "../../../../context/DarkModeContext"; // Import useDarkMode
+import { useDarkMode } from "../../../../context/DarkModeContext";
 
 /**
  * Documents Component
@@ -29,9 +29,12 @@ import { useDarkMode } from "../../../../context/DarkModeContext"; // Import use
  * - Verifies BASE_URL usage in API calls.
  */
 const Documents = () => {
-  const { darkMode } = useDarkMode(); // Access dark mode state
+  const { darkMode } = useDarkMode();
   const [selectedTab, setSelectedTab] = useState("all");
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editDocument, setEditDocument] = useState(null);
+  const [editFormData, setEditFormData] = useState({ name: "" });
   const [uploadFormData, setUploadFormData] = useState({
     file: null,
     category: "other",
@@ -48,6 +51,14 @@ const Documents = () => {
     queryKey: ["landlordDocuments"],
     queryFn: () => landlordApi.fetchDocuments(localStorage.getItem("token")),
     enabled: !!localStorage.getItem("token"),
+    onError: (error) => {
+      console.error("[Documents] Fetch documents error:", error);
+    },
+    retry: 1,
+    retryDelay: 2000,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    cacheTime: 15 * 60 * 1000, // 15 minutes
+    refetchOnWindowFocus: false, // Prevent bounces
   });
 
   // Upload document mutation
@@ -62,6 +73,23 @@ const Documents = () => {
     },
     onError: (err) => {
       toast.error(`Failed to upload document: ${err.message}`);
+    },
+  });
+
+  // Placeholder mutation for renaming a document (requires backend support)
+  const renameDocumentMutation = useMutation({
+    mutationFn: ({ docId, newName }) =>
+      // Placeholder API call; replace with actual endpoint when available
+      Promise.resolve({ id: docId, name: newName }),
+    onSuccess: () => {
+      toast.success("Document renamed successfully!");
+      setIsEditModalOpen(false);
+      setEditDocument(null);
+      setEditFormData({ name: "" });
+      refetch();
+    },
+    onError: (err) => {
+      toast.error(`Failed to rename document: ${err.message}`);
     },
   });
 
@@ -102,26 +130,56 @@ const Documents = () => {
   ).length;
 
   const handleDownload = (docName, docUrl) => {
+    if (!docUrl) {
+      toast.error("Document URL is missing.");
+      return;
+    }
     // Construct the full URL using BASE_URL if necessary
     const fullUrl = docUrl.startsWith("http")
       ? docUrl
       : `${landlordApi.baseUrl}${docUrl}`;
-    // Placeholder: In a real app, this would trigger a download from the server
-    toast.info(`Downloading: ${docName} from ${fullUrl}`);
-    // Simulate download (in a real app, you'd create a link and trigger a download)
+    toast.info(`Downloading: ${docName || "Unnamed Document"} from ${fullUrl}`);
     const link = document.createElement("a");
     link.href = fullUrl;
-    link.download = docName;
+    link.download = docName || "document";
     link.click();
   };
 
-  const handleEdit = (docName) => {
-    // Placeholder: Implement edit functionality (e.g., open a modal to rename the document)
-    toast.info(`Editing: ${docName}`);
+  const handleEdit = (doc) => {
+    setEditDocument(doc);
+    setEditFormData({ name: doc.name || "" });
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditFormChange = (e) => {
+    const { name, value } = e.target;
+    setEditFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleEditSubmit = (e) => {
+    e.preventDefault();
+    if (!editFormData.name.trim()) {
+      toast.error("Document name cannot be empty.");
+      return;
+    }
+    renameDocumentMutation.mutate({
+      docId: editDocument.id,
+      newName: editFormData.name,
+    });
+  };
+
+  const handleEditModalClose = () => {
+    setIsEditModalOpen(false);
+    setEditDocument(null);
+    setEditFormData({ name: "" });
   };
 
   const handleDelete = (docId, docName) => {
-    if (window.confirm(`Are you sure you want to delete ${docName}?`)) {
+    if (
+      window.confirm(
+        `Are you sure you want to delete ${docName || "this document"}?`
+      )
+    ) {
       deleteDocumentMutation.mutate(docId);
     }
   };
@@ -213,7 +271,8 @@ const Documents = () => {
             }`}
           >
             Dashboard
-          </span>{" "}
+          </span>
+          <span className="mx-2">&gt;</span>
           Documents
         </nav>
         {/* Header Section */}
@@ -349,16 +408,18 @@ const Documents = () => {
                         : "text-blue-500 text-3xl"
                     }
                   >
-                    {doc.icon}
+                    {doc.icon || <FaFileAlt />}
                   </span>
                   <div>
-                    <h4 className="font-semibold">{doc.name}</h4>
+                    <h4 className="font-semibold">
+                      {doc.name || "Unnamed Document"}
+                    </h4>
                     <p
                       className={`text-sm ${
                         darkMode ? "text-gray-400" : "text-gray-500"
                       }`}
                     >
-                      Updated {doc.updated}
+                      Updated {doc.updated || "Unknown"}
                     </p>
                   </div>
                 </div>
@@ -370,7 +431,7 @@ const Documents = () => {
                         : "text-gray-500 hover:text-gray-700"
                     }`}
                     onClick={() => handleDownload(doc.name, doc.url)}
-                    aria-label={`Download ${doc.name}`}
+                    aria-label={`Download ${doc.name || "document"}`}
                   />
                   <FaEdit
                     className={`text-xl cursor-pointer transition ${
@@ -378,8 +439,8 @@ const Documents = () => {
                         ? "text-gray-400 hover:text-teal-500"
                         : "text-gray-500 hover:text-blue-500"
                     }`}
-                    onClick={() => handleEdit(doc.name)}
-                    aria-label={`Edit ${doc.name}`}
+                    onClick={() => handleEdit(doc)}
+                    aria-label={`Edit ${doc.name || "document"}`}
                   />
                   <FaTrash
                     className={`text-xl cursor-pointer transition ${
@@ -388,7 +449,7 @@ const Documents = () => {
                         : "text-gray-500 hover:text-red-500"
                     }`}
                     onClick={() => handleDelete(doc.id, doc.name)}
-                    aria-label={`Delete ${doc.name}`}
+                    aria-label={`Delete ${doc.name || "document"}`}
                   />
                 </div>
               </div>
@@ -476,6 +537,67 @@ const Documents = () => {
                   disabled={uploadDocumentMutation.isLoading}
                 >
                   {uploadDocumentMutation.isLoading ? "Uploading..." : "Upload"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Document Modal */}
+      {isEditModalOpen && (
+        <div
+          className={`fixed inset-0 flex items-center justify-center z-50 ${
+            darkMode ? "bg-black/50" : "bg-black/50"
+          }`}
+        >
+          <div
+            className={`p-6 rounded-lg shadow-lg max-w-sm w-full ${
+              darkMode ? "bg-gray-800 text-gray-200" : "bg-white text-gray-800"
+            }`}
+          >
+            <h2 className="text-lg font-semibold mb-4">Rename Document</h2>
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              <div>
+                <label
+                  htmlFor="name"
+                  className={`block text-sm font-medium ${
+                    darkMode ? "text-gray-300" : "text-gray-700"
+                  }`}
+                >
+                  Document Name
+                </label>
+                <input
+                  type="text"
+                  id="name"
+                  name="name"
+                  value={editFormData.name}
+                  onChange={handleEditFormChange}
+                  className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
+                    darkMode
+                      ? "border-gray-600 bg-gray-800 text-gray-200"
+                      : "border-gray-300 bg-white text-gray-800"
+                  }`}
+                  placeholder="Enter new document name"
+                  required
+                />
+              </div>
+              <div className="flex justify-end space-x-4">
+                <Button
+                  variant="secondary"
+                  type="button"
+                  onClick={handleEditModalClose}
+                  className="text-sm sm:text-base"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  type="submit"
+                  className="text-sm sm:text-base"
+                  disabled={renameDocumentMutation.isLoading}
+                >
+                  {renameDocumentMutation.isLoading ? "Saving..." : "Save"}
                 </Button>
               </div>
             </form>

@@ -1,4 +1,5 @@
 module.exports = {
+  darkMode: "class",
   theme: {
     extend: {
       fontFamily: {
@@ -7,5 +8,4 @@ module.exports = {
       },
     },
   },
-
 };

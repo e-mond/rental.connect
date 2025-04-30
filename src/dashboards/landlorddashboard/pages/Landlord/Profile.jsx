@@ -1,565 +1,410 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   FiMail,
   FiPhone,
   FiHome,
-  FiUpload,
   FiEdit2,
   FiCalendar,
   FiMessageSquare,
   FiBriefcase,
 } from "react-icons/fi";
-import { useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import { useDarkMode } from "../../../../context/DarkModeContext";
 import GlobalSkeleton from "../../../../components/GlobalSkeleton";
+import ErrorDisplay from "../../../../components/ErrorDisplay";
 import Button from "../../../../components/Button";
-import { BASE_URL } from "../../../../config";
+import landlordApi from "../../../../api/landlordApi";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
+/**
+ * Profile Component
+ * Displays and manages the landlord's profile, including fetching user details,
+ * updating profile fields, and uploading a profile picture.
+ */
 const Profile = () => {
+  // Access dark mode context for theming
   const { darkMode } = useDarkMode();
-  const navigate = useNavigate();
-  const [profile, setProfile] = useState({
-    username: "",
-    email: "",
-    phone: "",
-    address: "",
-    dateOfBirth: "",
-    preferredContact: "",
-    businessName: "",
-    role: "",
-    createdAt: "",
-    profilePic: "",
-  });
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editField, setEditField] = useState("");
-  const [newValue, setNewValue] = useState("");
-  const [validationError, setValidationError] = useState("");
-  const [profilePictureFile, setProfilePictureFile] = useState(null);
-  const [profilePicPreview, setProfilePicPreview] = useState(null);
-  const [progress, setProgress] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [isDragging, setIsDragging] = useState(false);
+  // Access query client for invalidating queries after mutations
+  const queryClient = useQueryClient();
 
-  const calculateProgress = ({
-    profilePic,
-    username,
-    email,
-    phone,
-    address,
-    dateOfBirth,
-    preferredContact,
-    businessName,
-  }) =>
-    ([
-      profilePic,
-      username,
-      email,
-      phone,
-      address,
-      dateOfBirth,
-      preferredContact,
-      businessName,
-    ].filter(Boolean).length /
-      8) *
-    100;
+  // State for modal and editing fields
+  const [isModalOpen, setIsModalOpen] = useState(false); // Controls edit modal visibility
+  const [editField, setEditField] = useState(""); // Field being edited (e.g., "email")
+  const [newValue, setNewValue] = useState(""); // New value for the edited field
+  const [validationError, setValidationError] = useState(""); // Validation error message
+  const [profilePicPreview, setProfilePicPreview] = useState(null); // Preview URL for profile picture
 
-  const fetchProfile = useCallback(async () => {
-    try {
+  // Fetch profile data using React Query
+  const {
+    data: profile = {
+      username: "",
+      email: "",
+      phone: "",
+      address: "",
+      dateOfBirth: "",
+      preferredContact: "",
+      businessName: "",
+      role: "",
+      createdAt: "",
+      profilePic: "",
+    },
+    error,
+    isLoading,
+  } = useQuery({
+    queryKey: ["profile"],
+    queryFn: async () => {
       const token = localStorage.getItem("token");
-      if (!token) {
-        throw new Error("No authentication token found. Please log in.");
-      }
-
-      const response = await fetch(`${BASE_URL}/api/users/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(
-          `Failed to fetch profile: ${errorText || "Unknown error"} (HTTP ${
-            response.status
-          })`
-        );
-      }
-
-      const data = await response.json();
-      console.log("Profile API response:", data);
-      const createdAt = data.createdAt
-        ? new Date(data.createdAt).toISOString()
+      if (!token) throw new Error("No authentication token found");
+      const response = await landlordApi.fetchProfile(token);
+      console.log("[Profile] Raw fetchProfile response:", response); // Debug log
+      const createdAt = response.createdAt
+        ? new Date(response.createdAt).toISOString()
         : new Date().toISOString();
-      const updatedProfile = {
-        username: data.username || data.name || "",
-        email: data.email || "",
-        phone: data.phone || "",
-        address: data.address || "",
-        dateOfBirth: data.dateOfBirth || "",
-        preferredContact: data.preferredContact || "",
-        businessName: data.businessName || "",
-        role: data.role || "",
+      // Map response to profile state, providing defaults for missing fields
+      return {
+        username: response.username || response.name || "", // Avoid using email as username
+        email: response.email || "",
+        phone: response.phone || "",
+        address: response.address || "",
+        dateOfBirth: response.dateOfBirth || "",
+        preferredContact: response.preferredContact || "",
+        businessName: response.businessName || "",
+        role: response.role || "",
         createdAt,
-        profilePic: data.profilePic || "",
+        profilePic: response.profilePic || "",
+        fullName: response.fullName || "",
+        firstName: response.firstName || "",
+        lastName: response.lastName || "",
       };
-      setProfile(updatedProfile);
+    },
+    onSuccess: (data) => {
+      console.log("[Profile] Profile data fetched or refetched:", data); // Debug log
+      // Set profile picture preview on successful fetch
       setProfilePicPreview(data.profilePic || null);
-      setProgress(calculateProgress(updatedProfile));
-    } catch (err) {
-      console.error("Failed to fetch profile:", err);
-      setError(err.message);
-      if (err.message.includes("token") || err.message.includes("401")) {
-        navigate("/landlordlogin");
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [navigate]);
-
-  const saveProfilePicture = useCallback(async () => {
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        throw new Error("No authentication token found. Please log in.");
-      }
-
-      const formData = new FormData();
-      formData.append("profilePic", profilePictureFile);
-
-      const response = await fetch(`${BASE_URL}/api/users/me/picture`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
+    },
+    onError: (error) => {
+      console.error("[Profile] Fetch error:", error);
+      toast.error(error.message || "Failed to fetch profile", {
+        position: "top-right",
+        autoClose: 3000,
       });
+    },
+    retry: 1, // Retry once on failure
+    staleTime: 5 * 60 * 1000, // Cache data for 5 minutes
+  });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(
-          `Failed to upload profile picture: ${
-            errorText || "Unknown error"
-          } (HTTP ${response.status})`
-        );
-      }
+  // Mutation for uploading profile picture
+  const uploadProfilePicMutation = useMutation({
+    mutationFn: async (file) => {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("No authentication token found");
+      return landlordApi.uploadProfilePicture(token, file);
+    },
+    onSuccess: () => {
+      // Invalidate profile query to refetch updated data
+      queryClient.invalidateQueries(["profile"]);
+      toast.success("Profile picture updated successfully!", {
+        position: "top-right",
+        autoClose: 3000,
+      });
+    },
+    onError: (error) => {
+      console.error("[Profile] Upload profile picture error:", error);
+      toast.error(error.message || "Failed to upload profile picture", {
+        position: "top-right",
+        autoClose: 3000,
+      });
+    },
+  });
 
-      await fetchProfile();
-    } catch (err) {
-      console.error("Failed to update profile picture:", err);
-      setError(err.message);
-      if (err.message.includes("token") || err.message.includes("401")) {
-        navigate("/landlordlogin");
-      }
-    }
-  }, [profilePictureFile, fetchProfile, navigate]);
+  // Mutation for updating profile fields
+  const updateProfileMutation = useMutation({
+    mutationFn: async ({ field, value }) => {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("No authentication token found");
+      const response = await landlordApi.updateProfile(token, {
+        [field]: value,
+      });
+      console.log("[Profile] Update response:", response); // Debug log
+      return response;
+    },
+    onSuccess: () => {
+      // Invalidate profile query to refetch updated data
+      queryClient.invalidateQueries(["profile"]);
+      toast.success("Profile updated successfully!", {
+        position: "top-right",
+        autoClose: 3000,
+      });
+    },
+    onError: (error) => {
+      console.error("[Profile] Update profile error:", error);
+      toast.error(error.message || "Failed to update profile", {
+        position: "top-right",
+        autoClose: 3000,
+      });
+    },
+  });
 
+  /**
+   * Validates input for profile fields
+   * @param {string} field - The field being validated (e.g., "email")
+   * @param {string} value - The value to validate
+   * @returns {string} - Error message if validation fails, empty string if valid
+   */
   const validateInput = (field, value) => {
-    if (!value.trim()) {
-      return "Field cannot be empty.";
-    }
-    if (field === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+    if (!value.trim()) return "This field cannot be empty.";
+    if (field === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))
       return "Invalid email format.";
-    }
-    if (field === "phone" && !/^\+?\d{10,15}$/.test(value.replace(/\s/g, ""))) {
-      return "Invalid phone number.";
-    }
+    if (field === "phone" && !/^\+?\d{10,15}$/.test(value.replace(/\s/g, "")))
+      return "Invalid phone number format.";
     if (field === "dateOfBirth") {
       const date = new Date(value);
-      if (isNaN(date.getTime()) || date > new Date()) {
-        return "Invalid or future date of birth.";
-      }
+      if (isNaN(date.getTime()) || date > new Date())
+        return "Invalid or future date.";
     }
     return "";
   };
 
-  const saveChanges = async () => {
-    const validationError = validateInput(editField, newValue);
-    if (validationError) {
-      setValidationError(validationError);
+  /**
+   * Handles profile picture change and uploads the new image
+   * @param {Event} e - The file input change event
+   */
+  const handleProfilePicChange = (e) => {
+    const file = e.target.files[0];
+    if (file && file.type.startsWith("image/")) {
+      setProfilePicPreview(URL.createObjectURL(file));
+      uploadProfilePicMutation.mutate(file);
+    } else {
+      toast.error("Please upload a valid image file.", {
+        position: "top-right",
+        autoClose: 3000,
+      });
+    }
+  };
+
+  /**
+   * Saves changes to the profile field being edited
+   */
+  const saveChanges = () => {
+    const error = validateInput(editField, newValue);
+    if (error) {
+      setValidationError(error);
       return;
     }
-
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        throw new Error("No authentication token found. Please log in.");
-      }
-
-      const updatedProfile = { ...profile, [editField]: newValue };
-      const response = await fetch(`${BASE_URL}/api/users/me`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(updatedProfile),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(
-          `Failed to update profile: ${errorText || "Unknown error"} (HTTP ${
-            response.status
-          })`
-        );
-      }
-
-      await fetchProfile();
-    } catch (err) {
-      console.error("Failed to update profile:", err);
-      setError(err.message);
-      if (err.message.includes("token") || err.message.includes("401")) {
-        navigate("/landlordlogin");
-      }
-    } finally {
-      setIsModalOpen(false);
-      setNewValue("");
-      setEditField("");
-      setValidationError("");
-    }
+    updateProfileMutation.mutate({ field: editField, value: newValue });
+    setIsModalOpen(false);
+    setEditField("");
+    setNewValue("");
+    setValidationError("");
   };
 
-  const handleProfilePicChange = (file) => {
-    if (file) {
-      setProfilePictureFile(file);
-      setProfilePicPreview(URL.createObjectURL(file));
-    }
-  };
+  // Derive username consistent with dashboards, avoiding email
+  const userName =
+    profile?.fullName ||
+    `${profile?.firstName || ""} ${profile?.lastName || ""}`.trim() ||
+    "Landlord";
 
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith("image/")) {
-      handleProfilePicChange(file);
-    } else {
-      setError("Please upload a valid image file.");
-    }
-  };
+  // Calculate profile completion percentage
+  const fieldsFilled = Object.values(profile).filter(
+    (val) => val && typeof val === "string" && val.trim() !== ""
+  ).length;
+  const totalFields = 9; // Number of fields excluding profilePic
+  const progress = Math.round((fieldsFilled / totalFields) * 100);
 
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  useEffect(() => {
-    fetchProfile();
-  }, [fetchProfile]);
-
-  useEffect(() => {
-    if (profilePictureFile) saveProfilePicture();
-    return () => {
-      if (profilePicPreview) URL.revokeObjectURL(profilePicPreview);
-    };
-  }, [profilePictureFile, saveProfilePicture, profilePicPreview]);
-
-  if (loading) {
-    return (
-      <div
-        className={`max-w-2xl mx-auto p-4 sm:p-6 ${
-          darkMode ? "bg-gray-800" : "bg-gray-100"
-        } min-h-screen lg:max-w-5xl`}
-      >
-        <div
-          className={`animate-pulse ${
-            darkMode ? "bg-gray-700" : "bg-gray-300"
-          } h-8 w-1/4 rounded mb-6 mx-auto sm:mx-0`}
-        />
-        <GlobalSkeleton
-          type="profile-header"
-          bgColor={darkMode ? "bg-gray-700" : "bg-gray-300"}
-          animationSpeed="1.2s"
-        />
-        <div
-          className={`${
-            darkMode ? "bg-gray-900" : "bg-white"
-          } mt-6 p-4 rounded-lg shadow-md`}
-        >
-          <GlobalSkeleton
-            type="profile-info"
-            bgColor={darkMode ? "bg-gray-700" : "bg-gray-300"}
-            animationSpeed="1.2s"
-          />
-        </div>
-      </div>
-    );
+  // Render error state
+  if (error) {
+    return <ErrorDisplay error={error} />;
   }
 
-  if (error) {
-    return (
-      <div
-        className={`max-w-2xl mx-auto p-4 sm:p-6 ${
-          darkMode ? "bg-gray-800" : "bg-gray-100"
-        } min-h-screen lg:max-w-5xl`}
-      >
-        <div
-          className={`p-3 rounded-lg text-center text-sm ${
-            darkMode ? "bg-red-900 text-red-300" : "bg-red-100 text-red-700"
-          }`}
-        >
-          {error}
-        </div>
-      </div>
-    );
+  // Render loading state
+  if (isLoading) {
+    return <GlobalSkeleton />;
   }
 
   return (
     <div
-      className={`max-w-2xl mx-auto p-4 sm:p-6 ${
-        darkMode ? "bg-gray-800 text-gray-200" : "bg-gray-100 text-gray-900"
-      } min-h-screen lg:max-w-5xl`}
+      className={`flex flex-col items-center justify-center p-4 ${
+        darkMode ? "bg-gray-900 text-white" : "bg-white text-gray-900"
+      } w-full min-h-11/12 overflow-hidden`}
     >
-      <h1 className="text-2xl font-bold mb-6 text-center sm:text-left lg:text-3xl animate-fade-in">
-        My Landlord Profile
-      </h1>
+      {/* Toast container for notifications */}
+      <ToastContainer />
 
-      {/* Profile Header */}
-      <div
-        className={`p-4 sm:p-6 rounded-lg shadow-md mb-6 ${
-          darkMode ? "bg-gray-900 shadow-gray-700" : "bg-white shadow-gray-200"
-        } animate-slide-up`}
+      {/* Profile Card */}
+      <motion.div
+        layout
+        className="w-full max-w-4xl bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 grid grid-cols-1 md:grid-cols-2 gap-6"
       >
-        <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
-          <div
-            className={`relative group w-32 h-32 lg:w-36 lg:h-36 ${
-              isDragging ? "border-2 border-dashed border-blue-500" : ""
-            } rounded-full overflow-hidden`}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-          >
+        {/* Left Section: Profile Picture & Completion Progress */}
+        <div className="flex flex-col items-center space-y-4">
+          <div className="relative">
             <img
               src={
-                profilePicPreview || "https://placehold.co/96x96?text=No+Pic"
+                profilePicPreview ||
+                `https://api.dicebear.com/7.x/personas/svg?seed=${profile.username}`
               }
               alt="Profile"
-              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              className="w-32 h-32 rounded-full object-cover border-4 border-gray-300"
+              onError={(e) =>
+                (e.target.src = `https://api.dicebear.com/7.x/personas/svg?seed=${profile.username}`)
+              }
             />
-            <div
-              className={`absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 transition-opacity duration-300 ${
-                isDragging || profilePicPreview
-                  ? "opacity-0"
-                  : "opacity-100 group-hover:opacity-100"
-              }`}
-            >
-              <FiUpload
-                className={`cursor-pointer text-2xl ${
-                  darkMode ? "text-blue-400" : "text-blue-600"
-                } hover:text-blue-500`}
-                onClick={() =>
-                  document.getElementById("profilePicInput").click()
-                }
-                aria-label="Upload profile picture"
-              />
-            </div>
-            <input
-              type="file"
-              id="profilePicInput"
-              className="hidden"
-              accept="image/*"
-              onChange={(e) => handleProfilePicChange(e.target.files[0])}
-            />
+            {uploadProfilePicMutation.isLoading && (
+              <div className="absolute inset-0 bg-black bg-opacity-40 rounded-full flex items-center justify-center text-white text-xs">
+                Uploading...
+              </div>
+            )}
           </div>
-          <div className="text-center sm:text-left">
-            <h2 className="text-xl font-semibold lg:text-2xl">
-              {profile.username || "Unnamed Landlord"}
-            </h2>
-            <p className="lg:text-lg capitalize">
-              {profile.role || "Landlord"}
-            </p>
-            <p
-              className={`text-sm ${
-                darkMode ? "text-gray-400" : "text-gray-600"
-              } lg:text-base`}
-            >
-              Member since: {new Date(profile.createdAt).toLocaleDateString()}
-            </p>
-          </div>
-        </div>
-        <div className="mt-6">
-          <div
-            className={`relative h-3 w-full rounded-full ${
-              darkMode ? "bg-gray-700" : "bg-gray-200"
-            }`}
+
+          {/* File input for uploading profile picture */}
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            id="fileInput"
+            onChange={handleProfilePicChange}
+          />
+          <label
+            htmlFor="fileInput"
+            className="cursor-pointer px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm"
           >
+            Change Picture
+          </label>
+
+          {/* Profile Completion Progress Bar */}
+          <div className="w-40 bg-gray-300 dark:bg-gray-700 rounded-full h-2">
             <div
-              className={`absolute left-0 top-0 h-3 rounded-full bg-gradient-to-r ${
-                darkMode
-                  ? "from-blue-500 to-blue-700"
-                  : "from-blue-600 to-blue-800"
-              } transition-all duration-500`}
+              className="bg-blue-500 h-2 rounded-full"
               style={{ width: `${progress}%` }}
             />
           </div>
-          <p
-            className={`mt-1 text-center text-sm font-medium ${
-              darkMode ? "text-gray-400" : "text-gray-600"
-            } lg:text-base`}
-          >
-            {progress === 100
-              ? "Profile Complete 🎉"
-              : `${progress.toFixed(0)}% completed`}
-          </p>
+          <p className="text-xs">{progress}% Completed</p>
         </div>
-      </div>
 
-      {/* Personal Information */}
-      <div
-        className={`p-4 sm:p-6 rounded-lg shadow-md ${
-          darkMode ? "bg-gray-900 shadow-gray-700" : "bg-white shadow-gray-200"
-        } animate-slide-up delay-100`}
-      >
-        <h2 className="text-lg font-bold mb-4 lg:text-xl">
-          Personal Information
-        </h2>
+        {/* Right Section: Profile Details */}
         <div className="space-y-4">
+          {/* Display Username with Dashboard Style */}
+          <h1 className="text-xl font-bold text-center">
+            <span className={darkMode ? "text-teal-300" : "text-white"}>
+              {userName}
+            </span>
+          </h1>
+
+          {/* Display Profile Fields */}
           {[
-            { field: "username", label: "Username", icon: null, type: "text" },
             {
-              field: "email",
               label: "Email",
-              icon: <FiMail className="w-5 h-5" />,
-              type: "email",
+              value: profile.email,
+              icon: FiMail,
+              field: "email",
             },
             {
-              field: "phone",
               label: "Phone",
-              icon: <FiPhone className="w-5 h-5" />,
-              type: "tel",
+              value: profile.phone,
+              icon: FiPhone,
+              field: "phone",
             },
             {
-              field: "address",
               label: "Address",
-              icon: <FiHome className="w-5 h-5" />,
-              type: "text",
+              value: profile.address,
+              icon: FiHome,
+              field: "address",
             },
             {
-              field: "dateOfBirth",
               label: "Date of Birth",
-              icon: <FiCalendar className="w-5 h-5" />,
-              type: "date",
+              value: profile.dateOfBirth,
+              icon: FiCalendar,
+              field: "dateOfBirth",
             },
             {
-              field: "preferredContact",
               label: "Preferred Contact",
-              icon: <FiMessageSquare className="w-5 h-5" />,
-              type: "text",
+              value: profile.preferredContact,
+              icon: FiMessageSquare,
+              field: "preferredContact",
             },
             {
-              field: "businessName",
               label: "Business Name",
-              icon: <FiBriefcase className="w-5 h-5" />,
-              type: "text",
+              value: profile.businessName,
+              icon: FiBriefcase,
+              field: "businessName",
             },
-          ].map(({ field, label, icon, type }) => (
-            <div
-              key={field}
-              className="flex items-center justify-between gap-4"
-            >
-              <div
-                className={`flex items-center gap-3 ${
-                  darkMode ? "text-gray-300" : "text-gray-700"
-                }`}
-              >
-                {icon}
-                <span className="text-sm lg:text-base">
-                  {profile[field] ||
-                    (field === "preferredContact" || field === "businessName"
-                      ? "Not specified"
-                      : `No ${label} set`)}
-                </span>
+          ].map(({ label, value, icon: Icon, field }) => (
+            <div key={field} className="flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <Icon className="text-blue-500" />
+                <div>
+                  <h3 className="font-semibold">{label}</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {value || "Not provided"}
+                  </p>
+                </div>
               </div>
-              <FiEdit2
-                className={`cursor-pointer text-xl ${
-                  darkMode
-                    ? "text-blue-400 hover:text-blue-300"
-                    : "text-blue-600 hover:text-blue-700"
-                } transition-colors duration-200`}
+              <button
                 onClick={() => {
                   setEditField(field);
-                  setNewValue(profile[field] || "");
+                  setNewValue(value || "");
                   setIsModalOpen(true);
                 }}
-                aria-label={`Edit ${label}`}
-              />
+                className="text-blue-500 hover:text-blue-700"
+              >
+                <FiEdit2 />
+              </button>
             </div>
           ))}
         </div>
-      </div>
+      </motion.div>
 
-      {/* Edit Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 animate-fade-in">
-          <div
-            className={`w-11/12 sm:w-96 rounded-lg p-6 sm:p-8 shadow-lg ${
-              darkMode ? "bg-gray-900 text-gray-200" : "bg-white text-gray-900"
-            } animate-scale-in`}
+      {/* Modal for Editing Profile Fields */}
+      <AnimatePresence>
+        {isModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50"
           >
-            <h2 className="text-lg font-bold mb-4">
-              Edit {editField.charAt(0).toUpperCase() + editField.slice(1)}
-            </h2>
-            <input
-              type={
-                editField === "email"
-                  ? "email"
-                  : editField === "phone"
-                  ? "tel"
-                  : editField === "dateOfBirth"
-                  ? "date"
-                  : "text"
-              }
-              className={`w-full rounded-lg border p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
-                darkMode
-                  ? "bg-gray-800 border-gray-600 text-gray-200"
-                  : "bg-white border-gray-300 text-gray-900"
-              } ${validationError ? "border-red-500" : ""}`}
-              value={newValue}
-              onChange={(e) => {
-                setNewValue(e.target.value);
-                setValidationError(validateInput(editField, e.target.value));
-              }}
-              required
-            />
-            {validationError && (
-              <p
-                className={`mt-2 text-xs ${
-                  darkMode ? "text-red-400" : "text-red-500"
-                }`}
-              >
-                {validationError}
-              </p>
-            )}
-            <div className="mt-6 flex justify-end gap-3">
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setIsModalOpen(false);
-                  setNewValue("");
-                  setEditField("");
-                  setValidationError("");
-                }}
-                className="text-sm"
-                aria-label="Cancel edit"
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                onClick={saveChanges}
-                className="text-sm"
-                disabled={!!validationError || !newValue.trim()}
-                aria-label="Save changes"
-              >
-                Save
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+            <motion.div
+              initial={{ scale: 0.8 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.8 }}
+              className="bg-white dark:bg-gray-700 p-6 rounded-xl w-72 space-y-4"
+            >
+              <h2 className="text-lg font-bold capitalize text-center">
+                Edit {editField}
+              </h2>
+
+              <input
+                type={editField === "dateOfBirth" ? "date" : "text"}
+                value={newValue}
+                onChange={(e) => setNewValue(e.target.value)}
+                className="w-full border rounded-md p-2 dark:bg-gray-600 dark:text-gray-200 dark:border-gray-500"
+                placeholder={`Enter new ${editField}`}
+              />
+
+              {validationError && (
+                <p className="text-xs text-red-500">{validationError}</p>
+              )}
+
+              <div className="flex justify-between">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setEditField("");
+                    setNewValue("");
+                    setValidationError("");
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={saveChanges}>Save</Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

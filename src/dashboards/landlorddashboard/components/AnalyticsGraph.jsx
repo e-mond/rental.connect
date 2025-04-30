@@ -1,11 +1,26 @@
 import { useEffect, useRef } from "react";
-import Chart from "chart.js/auto";
 import PropTypes from "prop-types";
+import Chart from "chart.js/auto";
 import { FaBell } from "react-icons/fa";
 import ChartDataLabels from "chartjs-plugin-datalabels";
 import { useDarkMode } from "../../../context/DarkModeContext";
 import Button from "../../../components/Button";
 
+/**
+ * AnalyticsGraph displays a pie chart, quick stats, summary table, and notifications
+ * for the landlord dashboard, visualizing key metrics.
+ *
+ * @component
+ * @param {Object} props - Component props
+ * @param {number} props.numberOfTenants - Number of active tenants
+ * @param {number} props.maintenanceIssues - Number of pending maintenance issues
+ * @param {number} props.averageRating - Average rating from tenants
+ * @param {Object} props.quickStats - Quick stats for properties, tenants, and revenue
+ * @param {Array} props.notifications - List of notifications
+ * @param {Function} props.onResolveIssues - Handler for resolving urgent issues
+ * @param {string} props.currency - Selected currency for displaying amounts
+ * @returns {JSX.Element} The rendered AnalyticsGraph component
+ */
 const AnalyticsGraph = ({
   numberOfTenants,
   maintenanceIssues,
@@ -19,27 +34,35 @@ const AnalyticsGraph = ({
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
 
-  // Defensive check for quickStats
+  // Ensure quickStats has fallback values to prevent undefined errors
   const safeQuickStats = quickStats || {
     totalProperties: 0,
     totalTenants: 0,
     totalRevenueThisYear: "0.00",
   };
 
+  // Initialize and update pie chart
   useEffect(() => {
+    // Ensure data is non-negative and handle edge cases
     const data = [
       Math.max(numberOfTenants || 0, 0),
       Math.max(maintenanceIssues || 0, 0),
       Math.max(averageRating || 0, 0),
     ];
 
-    const total = data.reduce((sum, value) => sum + value, 0) || 1;
-    const percentages = data.map((value) => ((value / total) * 100).toFixed(1));
+    // Check if all values are 0 to avoid division by zero
+    const total = data.reduce((sum, value) => sum + value, 0);
+    const percentages =
+      total > 0
+        ? data.map((value) => ((value / total) * 100).toFixed(1))
+        : [33.3, 33.3, 33.4]; // Equal distribution if all values are 0
 
+    // Destroy existing chart to prevent memory leaks
     if (chartInstanceRef.current) {
       chartInstanceRef.current.destroy();
     }
 
+    // Create new pie chart
     const ctx = chartRef.current.getContext("2d");
     chartInstanceRef.current = new Chart(ctx, {
       type: "pie",
@@ -48,7 +71,7 @@ const AnalyticsGraph = ({
         datasets: [
           {
             label: "Key Metrics",
-            data: data,
+            data: total > 0 ? data : [1, 1, 1], // Avoid empty chart by using minimal values
             backgroundColor: [
               "rgba(54, 162, 235, 0.6)",
               "rgba(255, 99, 132, 0.6)",
@@ -106,7 +129,7 @@ const AnalyticsGraph = ({
             color: darkMode ? "#ffffff" : "#000000",
             formatter: (value, ctx) => {
               const percentage = percentages[ctx.dataIndex];
-              return `${percentage}%`;
+              return total > 0 ? `${percentage}%` : "0%";
             },
             font: {
               weight: "bold",
@@ -118,6 +141,7 @@ const AnalyticsGraph = ({
       plugins: [ChartDataLabels],
     });
 
+    // Cleanup chart on component unmount
     return () => {
       if (chartInstanceRef.current) {
         chartInstanceRef.current.destroy();
@@ -129,8 +153,12 @@ const AnalyticsGraph = ({
     <div
       className={`mb-4 sm:mb-6 ${darkMode ? "text-gray-200" : "text-black"}`}
     >
-      {/* Quick Stats */}
-      <div className="mb-4 sm:mb-6">
+      {/* Quick Stats Section */}
+      <div
+        className={`mb-4 sm:mb-6 p-4 rounded-lg shadow ${
+          darkMode ? "bg-gray-800" : "bg-white"
+        }`}
+      >
         <h4
           className={`text-sm sm:text-md font-semibold mb-2 ${
             darkMode ? "text-gray-300" : "text-gray-800"
@@ -148,7 +176,7 @@ const AnalyticsGraph = ({
               {safeQuickStats.totalProperties}
             </p>
             <p
-              className={`text-gray-600 text-xs sm:text-sm ${
+              className={`text-xs sm:text-sm ${
                 darkMode ? "text-gray-400" : "text-gray-600"
               }`}
             >
@@ -164,7 +192,7 @@ const AnalyticsGraph = ({
               {safeQuickStats.totalTenants}
             </p>
             <p
-              className={`text-gray-600 text-xs sm:text-sm ${
+              className={`text-xs sm:text-sm ${
                 darkMode ? "text-gray-400" : "text-gray-600"
               }`}
             >
@@ -180,7 +208,7 @@ const AnalyticsGraph = ({
               {currency} {safeQuickStats.totalRevenueThisYear}
             </p>
             <p
-              className={`text-gray-600 text-xs sm:text-sm ${
+              className={`text-xs sm:text-sm ${
                 darkMode ? "text-gray-400" : "text-gray-600"
               }`}
             >
@@ -190,13 +218,21 @@ const AnalyticsGraph = ({
         </div>
       </div>
 
-      {/* Pie Chart */}
-      <div className="chart-container w-full max-w-xs sm:max-w-sm mx-auto h-64 mb-4 sm:mb-6">
+      {/* Pie Chart Section */}
+      <div className="chart-container w-full max-w-md sm:max-w-lg mx-auto h-64 mb-4 sm:mb-6">
         <canvas ref={chartRef} aria-label="Key metrics pie chart" />
       </div>
 
-      {/* Summary Table */}
-      <div className="overflow-x-auto mb-4 sm:mb-6">
+      {/* Summary Table Section */}
+      <div
+        className={`overflow-x-auto mb-4 sm:mb-6 scrollbar-hidden ${
+          darkMode ? "text-gray-400" : "text-gray-600"
+        }`}
+        style={{
+          scrollbarWidth: "none", // Firefox
+          msOverflowStyle: "none", // IE and Edge
+        }}
+      >
         <table
           className={`w-full text-left text-xs sm:text-sm ${
             darkMode ? "text-gray-400" : "text-gray-600"
@@ -241,14 +277,14 @@ const AnalyticsGraph = ({
                   darkMode ? "text-gray-200" : "text-gray-800"
                 }`}
               >
-                {numberOfTenants}
+                {numberOfTenants || 0}
               </td>
               <td
                 className={`py-1 sm:py-2 px-2 sm:px-4 ${
                   darkMode ? "text-gray-400" : "text-gray-600"
                 }`}
               >
-                {numberOfTenants} active tenants across your properties.
+                {numberOfTenants || 0} active tenants across your properties.
               </td>
             </tr>
             <tr className="border-b">
@@ -264,14 +300,14 @@ const AnalyticsGraph = ({
                   darkMode ? "text-gray-200" : "text-gray-800"
                 }`}
               >
-                {maintenanceIssues}
+                {maintenanceIssues || 0}
               </td>
               <td
                 className={`py-1 sm:py-2 px-2 sm:px-4 ${
                   darkMode ? "text-gray-400" : "text-gray-600"
                 }`}
               >
-                {maintenanceIssues} pending issues awaiting resolution.
+                {maintenanceIssues || 0} pending issues awaiting resolution.
               </td>
             </tr>
             <tr>
@@ -287,7 +323,7 @@ const AnalyticsGraph = ({
                   darkMode ? "text-gray-200" : "text-gray-800"
                 }`}
               >
-                {averageRating.toFixed(1)}/5
+                {(averageRating || 0).toFixed(1)}/5
               </td>
               <td
                 className={`py-1 sm:py-2 px-2 sm:px-4 ${
@@ -301,7 +337,7 @@ const AnalyticsGraph = ({
         </table>
       </div>
 
-      {/* Notifications */}
+      {/* Notifications Section */}
       <div>
         <h4
           className={`text-sm sm:text-md font-semibold mb-2 flex items-center ${
@@ -309,8 +345,9 @@ const AnalyticsGraph = ({
           }`}
         >
           <FaBell
-            className={darkMode ? "text-yellow-300" : "text-yellow-500"}
-            mr-2
+            className={`${
+              darkMode ? "text-yellow-300" : "text-yellow-500"
+            } mr-2`}
             aria-hidden="true"
           />
           Notifications
@@ -364,6 +401,7 @@ const AnalyticsGraph = ({
   );
 };
 
+// PropTypes for type checking
 AnalyticsGraph.propTypes = {
   numberOfTenants: PropTypes.number,
   maintenanceIssues: PropTypes.number,
@@ -399,5 +437,21 @@ AnalyticsGraph.defaultProps = {
   onResolveIssues: () => {},
   currency: "GH₵",
 };
+
+// Inline CSS to hide scrollbar for Webkit browsers
+const styles = `
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
+`;
+
+// Inject styles into the document (if not already present)
+if (!document.querySelector("style[data-analytics-graph]")) {
+  const styleSheet = document.createElement("style");
+  styleSheet.type = "text/css";
+  styleSheet.setAttribute("data-analytics-graph", "true");
+  styleSheet.innerText = styles;
+  document.head.appendChild(styleSheet);
+}
 
 export default AnalyticsGraph;

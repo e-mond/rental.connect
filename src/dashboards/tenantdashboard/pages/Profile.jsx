@@ -3,13 +3,14 @@ import {
   FiMail,
   FiPhone,
   FiHome,
-  FiUpload,
+  // FiUpload,
   FiEdit2,
   FiCalendar,
   FiMessageSquare,
   FiAlertCircle,
 } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import { useDarkMode } from "../../../context/DarkModeContext";
 import GlobalSkeleton from "../../../components/GlobalSkeleton";
 import Button from "../../../components/Button";
@@ -29,6 +30,9 @@ const Profile = () => {
     role: "",
     createdAt: "",
     profilePic: "",
+    fullName: "",
+    firstName: "",
+    lastName: "",
   });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editField, setEditField] = useState("");
@@ -103,6 +107,9 @@ const Profile = () => {
         role: data.role || "",
         createdAt,
         profilePic: data.profilePic || "",
+        fullName: data.fullName || "",
+        firstName: data.firstName || "",
+        lastName: data.lastName || "",
       };
       setProfile(updatedProfile);
       setProfilePicPreview(data.profilePic || null);
@@ -246,6 +253,12 @@ const Profile = () => {
     setIsDragging(false);
   };
 
+  // Derive username consistent with landlord profile
+  const userName =
+    profile?.fullName ||
+    `${profile?.firstName || ""} ${profile?.lastName || ""}`.trim() ||
+    "Tenant";
+
   useEffect(() => {
     fetchProfile();
   }, [fetchProfile]);
@@ -258,43 +271,15 @@ const Profile = () => {
   }, [profilePictureFile, saveProfilePicture, profilePicPreview]);
 
   if (loading) {
-    return (
-      <div
-        className={`max-w-2xl mx-auto p-4 sm:p-6 ${
-          darkMode ? "bg-gray-800" : "bg-gray-100"
-        } min-h-screen lg:max-w-6xl`}
-      >
-        <div
-          className={`animate-pulse ${
-            darkMode ? "bg-gray-700" : "bg-gray-300"
-          } h-8 w-1/4 rounded mb-6 mx-auto sm:mx-0`}
-        />
-        <GlobalSkeleton
-          type="profile-header"
-          bgColor={darkMode ? "bg-gray-700" : "bg-gray-300"}
-          animationSpeed="1.2s"
-        />
-        <div
-          className={`${
-            darkMode ? "bg-gray-900" : "bg-white"
-          } mt-6 p-4 rounded-lg shadow-md`}
-        >
-          <GlobalSkeleton
-            type="profile-info"
-            bgColor={darkMode ? "bg-gray-700" : "bg-gray-300"}
-            animationSpeed="1.2s"
-          />
-        </div>
-      </div>
-    );
+    return <GlobalSkeleton />;
   }
 
   if (error) {
     return (
       <div
-        className={`max-w-2xl mx-auto p-4 sm:p-6 ${
-          darkMode ? "bg-gray-800" : "bg-gray-100"
-        } min-h-screen lg:max-w-6xl`}
+        className={`flex flex-col items-center justify-center p-4 ${
+          darkMode ? "bg-gray-900 text-white" : "bg-white text-gray-900"
+        } w-full min-h-screen overflow-hidden`}
       >
         <div
           className={`p-3 rounded-lg text-center text-sm ${
@@ -309,250 +294,208 @@ const Profile = () => {
 
   return (
     <div
-      className={`w-lvh mx-auto p-4 sm:p-6 ${
-        darkMode ? "bg-gray-800 text-gray-200" : "bg-gray-100 text-gray-900"
-      } min-h-screen`}
+      className={`flex flex-col items-center justify-center p-4 ${
+        darkMode ? "bg-gray-900 text-white" : "bg-white text-gray-900"
+      } w-full min-h-screen overflow-hidden`}
     >
-      <h1 className="text-2xl font-bold mb-6 text-center sm:text-left lg:text-3xl animate-fade-in">
-        My Profile
-      </h1>
-
-      {/* Profile Header */}
-      <div
-        className={`p-4 sm:p-6 rounded-lg shadow-md mb-6 ${
-          darkMode ? "bg-gray-900 shadow-gray-700" : "bg-white shadow-gray-200"
-        } animate-slide-up`}
+      {/* Profile Card */}
+      <motion.div
+        layout
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="w-full max-w-4xl bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 grid grid-cols-1 md:grid-cols-2 gap-6"
       >
-        <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
+        {/* Left Section: Profile Picture & Completion Progress */}
+        <div className="flex flex-col items-center space-y-4">
           <div
-            className={`relative group w-32 h-32 lg:w-36 lg:h-36 ${
-              isDragging ? "border-2 border-dashed border-blue-500" : ""
-            } rounded-full overflow-hidden`}
+            className={`relative w-32 h-32 rounded-full overflow-hidden ${
+              isDragging
+                ? "border-4 border-dashed border-blue-500"
+                : "border-4 border-gray-300"
+            }`}
             onDrop={handleDrop}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
           >
             <img
               src={
-                profilePicPreview || "https://placehold.co/96x96?text=No+Pic"
+                profilePicPreview ||
+                `https://api.dicebear.com/7.x/personas/svg?seed=${profile.username}`
               }
               alt="Profile"
-              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              className="w-full h-full object-cover"
+              onError={(e) =>
+                (e.target.src = `https://api.dicebear.com/7.x/personas/svg?seed=${profile.username}`)
+              }
             />
-            <div
-              className={`absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 transition-opacity duration-300 ${
-                isDragging || profilePicPreview
-                  ? "opacity-0"
-                  : "opacity-100 group-hover:opacity-100"
-              }`}
-            >
-              <FiUpload
-                className={`cursor-pointer text-2xl ${
-                  darkMode ? "text-blue-400" : "text-blue-600"
-                } hover:text-blue-500`}
-                onClick={() =>
-                  document.getElementById("profilePicInput").click()
-                }
-                aria-label="Upload profile picture"
-              />
-            </div>
-            <input
-              type="file"
-              id="profilePicInput"
-              className="hidden"
-              accept="image/*"
-              onChange={(e) => handleProfilePicChange(e.target.files[0])}
-            />
+            {profilePictureFile && (
+              <div className="absolute inset-0 bg-black bg-opacity-40 rounded-full flex items-center justify-center text-white text-xs">
+                Uploading...
+              </div>
+            )}
           </div>
-          <div className="text-center sm:text-left">
-            <h2 className="text-xl font-semibold lg:text-2xl">
-              {profile.username || "Unnamed Tenant"}
-            </h2>
-            <p className="lg:text-lg capitalize">{profile.role || "Tenant"}</p>
-            <p
-              className={`text-sm ${
-                darkMode ? "text-gray-400" : "text-gray-600"
-              } lg:text-base`}
-            >
-              Member since: {new Date(profile.createdAt).toLocaleDateString()}
-            </p>
-          </div>
-        </div>
-        <div className="mt-6">
-          <div
-            className={`relative h-3 w-full rounded-full ${
-              darkMode ? "bg-gray-700" : "bg-gray-200"
-            }`}
+
+          {/* File input for uploading profile picture */}
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            id="profilePicInput"
+            onChange={(e) => handleProfilePicChange(e.target.files[0])}
+          />
+          <label
+            htmlFor="profilePicInput"
+            className="cursor-pointer px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm"
           >
+            Change Picture
+          </label>
+
+          {/* Profile Completion Progress Bar */}
+          <div className="w-40 bg-gray-300 dark:bg-gray-700 rounded-full h-2">
             <div
-              className={`absolute left-0 top-0 h-3 rounded-full bg-gradient-to-r ${
-                darkMode
-                  ? "from-blue-500 to-blue-700"
-                  : "from-blue-600 to-blue-800"
-              } transition-all duration-500`}
+              className="bg-blue-500 h-2 rounded-full"
               style={{ width: `${progress}%` }}
             />
           </div>
-          <p
-            className={`mt-1 text-center text-sm font-medium ${
-              darkMode ? "text-gray-400" : "text-gray-600"
-            } lg:text-base`}
-          >
-            {progress === 100
-              ? "Profile Complete 🎉"
-              : `${progress.toFixed(0)}% completed`}
-          </p>
+          <p className="text-xs">{progress.toFixed(0)}% Completed</p>
         </div>
-      </div>
 
-      {/* Personal Information */}
-      <div
-        className={`p-4 sm:p-6 rounded-lg shadow-md ${
-          darkMode ? "bg-gray-900 shadow-gray-700" : "bg-white shadow-gray-200"
-        } animate-slide-up delay-100`}
-      >
-        <h2 className="text-lg font-bold mb-4 lg:text-xl">
-          Personal Information
-        </h2>
+        {/* Right Section: Profile Details */}
         <div className="space-y-4">
+          {/* Display Username with Landlord Profile Style */}
+          <h1 className="text-xl font-bold text-center">
+            <span className={darkMode ? "text-blue-300" : "text-blue-600"}>
+              {userName}
+            </span>
+          </h1>
+
+          {/* Display Profile Fields */}
           {[
-            { field: "username", label: "Username", icon: null },
             {
-              field: "email",
               label: "Email",
-              icon: <FiMail className="w-5 h-5" />,
+              value: profile.email,
+              icon: FiMail,
+              field: "email",
             },
             {
-              field: "phone",
               label: "Phone",
-              icon: <FiPhone className="w-5 h-5" />,
+              value: profile.phone,
+              icon: FiPhone,
+              field: "phone",
             },
             {
-              field: "address",
               label: "Address",
-              icon: <FiHome className="w-5 h-5" />,
+              value: profile.address,
+              icon: FiHome,
+              field: "address",
             },
             {
-              field: "dateOfBirth",
               label: "Date of Birth",
-              icon: <FiCalendar className="w-5 h-5" />,
+              value: profile.dateOfBirth,
+              icon: FiCalendar,
+              field: "dateOfBirth",
             },
             {
-              field: "preferredContact",
               label: "Preferred Contact",
-              icon: <FiMessageSquare className="w-5 h-5" />,
+              value: profile.preferredContact,
+              icon: FiMessageSquare,
+              field: "preferredContact",
             },
             {
-              field: "emergencyContact",
               label: "Emergency Contact",
-              icon: <FiAlertCircle className="w-5 h-5" />,
+              value: profile.emergencyContact,
+              icon: FiAlertCircle,
+              field: "emergencyContact",
             },
-          ].map(({ field, label, icon }) => (
-            <div
-              key={field}
-              className="flex items-center justify-between gap-4"
-            >
-              <div
-                className={`flex items-center gap-3 ${
-                  darkMode ? "text-gray-300" : "text-gray-700"
-                }`}
-              >
-                {icon}
-                <span className="text-sm lg:text-base">
-                  {profile[field] ||
-                    (field === "preferredContact" ||
-                    field === "emergencyContact"
-                      ? "Not specified"
-                      : `No ${label} set`)}
-                </span>
+          ].map(({ label, value, icon: Icon, field }) => (
+            <div key={field} className="flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <Icon className="text-blue-500" />
+                <div>
+                  <h3 className="font-semibold">{label}</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {value || "Not provided"}
+                  </p>
+                </div>
               </div>
-              <FiEdit2
-                className={`cursor-pointer text-xl ${
-                  darkMode
-                    ? "text-blue-400 hover:text-blue-300"
-                    : "text-blue-600 hover:text-blue-700"
-                } transition-colors duration-200`}
+              <button
                 onClick={() => {
                   setEditField(field);
-                  setNewValue(profile[field] || "");
+                  setNewValue(value || "");
                   setIsModalOpen(true);
                 }}
-                aria-label={`Edit ${label}`}
-              />
+                className="text-blue-500 hover:text-blue-700"
+              >
+                <FiEdit2 />
+              </button>
             </div>
           ))}
         </div>
-      </div>
+      </motion.div>
 
       {/* Edit Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 animate-fade-in">
-          <div
-            className={`w-11/12 sm:w-96 rounded-lg p-6 sm:p-8 shadow-lg ${
-              darkMode ? "bg-gray-900 text-gray-200" : "bg-white text-gray-900"
-            } animate-scale-in`}
+      <AnimatePresence>
+        {isModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50"
           >
-            <h2 className="text-lg font-bold mb-4">
-              Edit {editField.charAt(0).toUpperCase() + editField.slice(1)}
-            </h2>
-            <input
-              type={
-                editField === "email"
-                  ? "email"
-                  : editField === "phone" || editField === "emergencyContact"
-                  ? "tel"
-                  : editField === "dateOfBirth"
-                  ? "date"
-                  : "text"
-              }
-              className={`w-full rounded-lg border p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
-                darkMode
-                  ? "bg-gray-800 border-gray-600 text-gray-200"
-                  : "bg-white border-gray-300 text-gray-900"
-              } ${validationError ? "border-red-500" : ""}`}
-              value={newValue}
-              onChange={(e) => {
-                setNewValue(e.target.value);
-                setValidationError(validateInput(editField, e.target.value));
-              }}
-              required
-            />
-            {validationError && (
-              <p
-                className={`mt-2 text-xs ${
-                  darkMode ? "text-red-400" : "text-red-500"
-                }`}
-              >
-                {validationError}
-              </p>
-            )}
-            <div className="mt-6 flex justify-end gap-3">
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setIsModalOpen(false);
-                  setNewValue("");
-                  setEditField("");
-                  setValidationError("");
+            <motion.div
+              initial={{ scale: 0.8 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.8 }}
+              className="bg-white dark:bg-gray-700 p-6 rounded-xl w-72 space-y-4"
+            >
+              <h2 className="text-lg font-bold capitalize text-center">
+                Edit {editField}
+              </h2>
+              <input
+                type={
+                  editField === "email"
+                    ? "email"
+                    : editField === "phone" || editField === "emergencyContact"
+                    ? "tel"
+                    : editField === "dateOfBirth"
+                    ? "date"
+                    : "text"
+                }
+                value={newValue}
+                onChange={(e) => {
+                  setNewValue(e.target.value);
+                  setValidationError(validateInput(editField, e.target.value));
                 }}
-                className="text-sm"
-                aria-label="Cancel edit"
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                onClick={saveChanges}
-                className="text-sm"
-                disabled={!!validationError || !newValue.trim()}
-                aria-label="Save changes"
-              >
-                Save
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+                className="w-full border rounded-md p-2 dark:bg-gray-600 dark:text-gray-200 dark:border-gray-500"
+                placeholder={`Enter new ${editField}`}
+              />
+              {validationError && (
+                <p className="text-xs text-red-500">{validationError}</p>
+              )}
+              <div className="flex justify-between">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setNewValue("");
+                    setEditField("");
+                    setValidationError("");
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={saveChanges}
+                  disabled={!!validationError || !newValue.trim()}
+                >
+                  Save
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

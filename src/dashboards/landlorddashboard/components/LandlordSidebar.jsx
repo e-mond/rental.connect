@@ -16,12 +16,12 @@ import {
   ArrowLeftOnRectangleIcon,
 } from "@heroicons/react/24/outline";
 import GlobalSkeleton from "../../../components/GlobalSkeleton";
-import { DEFAULT_PROFILE_PIC, DASHBOARD_BASE_URL } from "../../../config";
-import { useDarkMode } from "../../../context/DarkModeContext"; // Import useDarkMode
-import Button from "../../../components/Button"; // Import Button component
+import { DASHBOARD_BASE_URL } from "../../../config";
+import { useDarkMode } from "../../../context/DarkModeContext";
+import Button from "../../../components/Button";
 
 const LandlordSidebar = ({ isOpen, setIsOpen, user, isLoading }) => {
-  const { darkMode } = useDarkMode(); // Access dark mode state
+  const { darkMode } = useDarkMode();
   const location = useLocation();
 
   // Persist sidebar state in localStorage
@@ -86,10 +86,18 @@ const LandlordSidebar = ({ isOpen, setIsOpen, user, isLoading }) => {
     },
   ];
 
+  // Function to generate initials from user name
+  const getInitials = (name) => {
+    if (!name) return "U";
+    const parts = name.trim().split(" ");
+    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+    return parts[0][0].toUpperCase() + parts[1][0].toUpperCase();
+  };
+
   // Handle logout
   const handleLogout = () => {
     localStorage.removeItem("token");
-    localStorage.removeItem("user"); // Also clear user data
+    localStorage.removeItem("user");
     window.location.href = "/landlordlogin";
   };
 
@@ -99,6 +107,7 @@ const LandlordSidebar = ({ isOpen, setIsOpen, user, isLoading }) => {
         isOpen ? "w-64" : "w-20"
       } ${darkMode ? "bg-gray-800 text-gray-200" : "bg-white text-gray-700"}`}
     >
+      {/* Sidebar Header */}
       <div className="flex items-center justify-between p-4">
         <Button
           variant="icon"
@@ -115,7 +124,8 @@ const LandlordSidebar = ({ isOpen, setIsOpen, user, isLoading }) => {
         </Button>
       </div>
 
-      <nav className="mt-2 flex-1">
+      {/* Navigation */}
+      <nav className="mt-2 flex-1 overflow-y-auto">
         <ul>
           {menuItems.map(({ name, path, icon: Icon }) => (
             <li
@@ -131,10 +141,8 @@ const LandlordSidebar = ({ isOpen, setIsOpen, user, isLoading }) => {
               }`}
             >
               <Link to={path} className="flex items-center space-x-3 relative">
-                <div className="relative">
-                  <Icon className="w-6 h-6" />
-                </div>
-                {isOpen && <span className="text-sm sm:text-base">{name}</span>}
+                <Icon className="w-6 h-6" />
+                {isOpen && <span className="text-sm">{name}</span>}
               </Link>
               {!isOpen && (
                 <span
@@ -156,6 +164,7 @@ const LandlordSidebar = ({ isOpen, setIsOpen, user, isLoading }) => {
           className={`my-2 ${darkMode ? "border-gray-600" : "border-gray-300"}`}
         />
 
+        {/* Management Links */}
         <ul>
           {managementItems.map(
             ({ name, path, icon: Icon, hasNotification }) => (
@@ -179,7 +188,7 @@ const LandlordSidebar = ({ isOpen, setIsOpen, user, isLoading }) => {
                     <Icon className="w-6 h-6" />
                     {hasNotification && (
                       <span
-                        className={`absolute -top-1 -right-1 w-4 h-4 ${
+                        className={`absolute -top-1 -right-1 w-3 h-3 ${
                           darkMode ? "bg-red-400" : "bg-red-500"
                         } rounded-full border-2 ${
                           darkMode ? "border-gray-800" : "border-white"
@@ -187,16 +196,7 @@ const LandlordSidebar = ({ isOpen, setIsOpen, user, isLoading }) => {
                       />
                     )}
                   </div>
-                  {isOpen && (
-                    <span className="text-sm sm:text-base">{name}</span>
-                  )}
-                  {isOpen && hasNotification && (
-                    <span
-                      className={`ml-2 w-3 h-3 ${
-                        darkMode ? "bg-red-400" : "bg-red-500"
-                      } rounded-full`}
-                    />
-                  )}
+                  {isOpen && <span className="text-sm">{name}</span>}
                 </Link>
                 {!isOpen && (
                   <span
@@ -207,13 +207,6 @@ const LandlordSidebar = ({ isOpen, setIsOpen, user, isLoading }) => {
                     } text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity z-10`}
                   >
                     {name}
-                    {hasNotification && (
-                      <span
-                        className={`ml-1 w-3 h-3 ${
-                          darkMode ? "bg-red-400" : "bg-red-500"
-                        } rounded-full inline-block`}
-                      />
-                    )}
                   </span>
                 )}
               </li>
@@ -222,6 +215,7 @@ const LandlordSidebar = ({ isOpen, setIsOpen, user, isLoading }) => {
         </ul>
       </nav>
 
+      {/* User Info & Logout */}
       {isLoading ? (
         <div
           className={`p-4 border-t ${
@@ -237,73 +231,52 @@ const LandlordSidebar = ({ isOpen, setIsOpen, user, isLoading }) => {
       ) : (
         user && (
           <div
-            className={`mx-2 p-4 flex items-center justify-between border-t ${
+            className={`mx-2 p-4 flex items-center gap-2 border-t ${
               darkMode ? "border-gray-600" : "border-gray-300"
-            } rounded-lg transition-colors duration-200 relative group ${
-              location.pathname === "/dashboard/landlord/profile"
-                ? darkMode
-                  ? "bg-gray-700"
-                  : "bg-gray-200"
-                : darkMode
-                ? "hover:bg-gray-600"
-                : "hover:bg-gray-100"
             }`}
           >
             <Link
               to="/dashboard/landlord/profile"
-              className="flex items-center space-x-3 flex-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  window.location.href = "/dashboard/landlord/profile";
-                }
-              }}
-              aria-label={`View profile of ${user.name || "User"}`}
+              className="flex items-center gap-3 flex-1 group focus:outline-none"
             >
-              <img
-                src={user.profilePic || DEFAULT_PROFILE_PIC}
-                alt="Profile"
-                className="w-10 h-10 rounded-full"
-              />
+              <div
+                className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-lg ${
+                  darkMode ? "bg-gray-600" : "bg-blue-500"
+                }`}
+              >
+                {getInitials(user.name)}
+              </div>
               {isOpen && (
-                <div>
-                  <p className="text-sm sm:text-base font-semibold">
+                <div className="flex flex-col">
+                  <p className="text-sm font-semibold truncate">
                     {user.name || "User"}
                   </p>
-                  <p
-                    className={`text-xs sm:text-sm ${
-                      darkMode ? "text-gray-400" : "text-gray-500"
-                    }`}
-                  >
+                  <p className="text-xs text-gray-400">
                     {user.accountType || "Landlord"}
                   </p>
                 </div>
               )}
             </Link>
 
-            {/* Logout Button */}
-            {isOpen && (
+            {/* Logout button */}
+            {isOpen ? (
               <Button
                 variant="danger"
                 onClick={handleLogout}
-                className="mt-2 mx-2 p-2 rounded-lg flex items-center justify-center"
+                className="p-2 rounded-lg flex items-center justify-center"
                 title="Logout"
               >
-                <ArrowLeftOnRectangleIcon className="w-6 h-6" />
+                <ArrowLeftOnRectangleIcon className="w-5 h-5" />
               </Button>
-            )}
-            {!isOpen && (
-              <span
-                className={`absolute left-16 ${
-                  darkMode
-                    ? "bg-gray-600 text-gray-200"
-                    : "bg-gray-800 text-white"
-                } text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity z-10`}
+            ) : (
+              <Button
+                variant="icon"
+                onClick={handleLogout}
+                className="p-2 rounded-full"
+                title="Logout"
               >
-                {user.name || "User"}
-              </span>
+                <ArrowLeftOnRectangleIcon className="w-5 h-5" />
+              </Button>
             )}
           </div>
         )
@@ -316,7 +289,6 @@ LandlordSidebar.propTypes = {
   isOpen: PropTypes.bool.isRequired,
   setIsOpen: PropTypes.func.isRequired,
   user: PropTypes.shape({
-    profilePic: PropTypes.string,
     name: PropTypes.string,
     accountType: PropTypes.string,
   }),

@@ -1,10 +1,12 @@
-import  { Component } from "react";
+
+import { Component } from "react";
 import PropTypes from "prop-types";
+import Button from "../components/Button"; // Assuming Button component exists
 
 /**
  * ErrorBoundary component to catch JavaScript errors in child components.
- * Displays a fallback UI when an error occurs and prevents infinite loops by ensuring
- * the fallback UI is error-free.
+ * Displays a user-friendly fallback UI when an error occurs, with an option to retry rendering.
+ * Logs errors to the console in development mode only.
  */
 class ErrorBoundary extends Component {
   state = {
@@ -14,20 +16,35 @@ class ErrorBoundary extends Component {
   };
 
   /**
-   * Catches errors in child components and updates the state to display a fallback UI.
+   * Synchronously updates state when an error is caught, ensuring the fallback UI renders immediately.
+   * @param {Error} error - The error that was thrown.
+   * @returns {Object} Updated state with error details.
+   */
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  /**
+   * Logs the error to the console in development mode only.
    * @param {Error} error - The error that was thrown.
    * @param {Object} errorInfo - Information about the component stack where the error occurred.
    */
   componentDidCatch(error, errorInfo) {
-    // Log the error to the console (or an error reporting service in production)
-    console.error("Error caught by ErrorBoundary:", error, errorInfo);
-    // Update state to display the error message
-    this.setState({
-      hasError: true,
-      error: error,
-      errorInfo: errorInfo,
-    });
+    // Log to console only in development mode
+    if (import.meta.env.MODE !== "production") {
+      console.error("Error caught by ErrorBoundary:", error, errorInfo);
+    }
+
+    // Update state with errorInfo for potential debugging (not exposed in production UI)
+    this.setState({ errorInfo });
   }
+
+  /**
+   * Resets the error state to attempt re-rendering the children.
+   */
+  handleRetry = () => {
+    this.setState({ hasError: false, error: null, errorInfo: null });
+  };
 
   /**
    * Renders the component.
@@ -36,30 +53,47 @@ class ErrorBoundary extends Component {
    */
   render() {
     if (this.state.hasError) {
-      // Fallback UI to display when an error occurs
-      // Ensure this UI is simple and error-free to prevent further errors
+      // Fallback UI: Simple, error-free, and user-friendly
       return (
-        <div style={{ padding: "20px", textAlign: "center" }}>
-          <h2>Something went wrong.</h2>
-          <p>An unexpected error occurred. Please try refreshing the page.</p>
-          {this.state.error && (
-            <details style={{ whiteSpace: "pre-wrap" }}>
-              <summary>Error Details</summary>
-              <p>{this.state.error.toString()}</p>
-              <p>{this.state.errorInfo?.componentStack}</p>
+        <div className="p-4 text-center">
+          <h2 className="text-xl font-bold text-red-500 mb-2">
+            Something went wrong
+          </h2>
+          <p className="text-gray-600 mb-4">
+            An unexpected error occurred. Please try again or refresh the page.
+          </p>
+          <Button
+            variant="primary"
+            onClick={this.handleRetry}
+            className="mt-4"
+            aria-label="Retry loading the application"
+          >
+            Retry
+          </Button>
+          {/* In development only, show error details */}
+          {import.meta.env.MODE !== "production" && this.state.error && (
+            <details className="mt-4 text-left">
+              <summary className="text-sm text-gray-500 cursor-pointer">
+                Error Details (Dev Only)
+              </summary>
+              <p className="text-sm text-gray-700 mt-2">
+                {this.state.error.toString()}
+              </p>
+              <p className="text-sm text-gray-700">
+                {this.state.errorInfo?.componentStack}
+              </p>
             </details>
           )}
         </div>
       );
     }
-    // Render the children if no error has occurred
+
     return this.props.children;
   }
 }
 
-// Define propTypes for ESLint validation
 ErrorBoundary.propTypes = {
-  children: PropTypes.node.isRequired, 
+  children: PropTypes.node.isRequired,
 };
 
 export default ErrorBoundary;

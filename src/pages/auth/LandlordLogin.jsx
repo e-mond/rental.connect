@@ -3,39 +3,54 @@ import { useNavigate, Link } from "react-router-dom";
 import { FaGoogle } from "react-icons/fa";
 import LandlordImage from "../../assets/Keys.jpg";
 import { jwtDecode } from "jwt-decode";
-import { BASE_URL } from "../../config"; // Universal BASE_URL
-import { useDarkMode } from "../../context/DarkModeContext"; // Updated import
-import { useUser } from "../../context/UserContext"; // Add UserContext
+import { BASE_URL } from "../../config";
+import { useDarkMode } from "../../context/DarkModeContext";
+import { useUser } from "../../context/useUser";
 import Button from "../../components/Button";
 
+/**
+ * LandlordLogin component handles the login functionality for landlords.
+ * It submits email and password to the backend, stores the received JWT token,
+ * and redirects to the appropriate dashboard based on the user's role.
+ */
 const LandlordLogin = () => {
-  const { darkMode } = useDarkMode();
-  const { setUser } = useUser(); // Add setUser from UserContext
-  const navigate = useNavigate();
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [email, setEmail] = useState(""); // Add state for form fields
-  const [password, setPassword] = useState("");
+  const { darkMode } = useDarkMode(); // Access dark mode state from context
+  const { login } = useUser(); // Access login function from UserContext to handle token
+  const navigate = useNavigate(); // Hook for programmatic navigation
+  const [error, setError] = useState(""); // State for error messages
+  const [loading, setLoading] = useState(false); // State for loading indicator
+  const [email, setEmail] = useState(""); // State for email input
+  const [password, setPassword] = useState(""); // State for password input
 
+  /**
+   * Handles the login form submission.
+   * Sends a POST request to the backend's login endpoint with email and password.
+   * Uses the UserContext login function to store the token and redirect based on role.
+   * @param {Event} e - The form submission event
+   */
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
+    // Prepare form data for the login request
     const formData = {
       email: e.target.email.value,
       password: e.target.password.value,
     };
 
     try {
+      // Send POST request to the backend login endpoint
       const response = await fetch(`${BASE_URL}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
 
+      // Log the response status for debugging
       console.log("Response status:", response.status);
 
+      // Check if the response is not OK (e.g., 401, 400)
       if (!response.ok) {
         const contentType = response.headers.get("Content-Type");
         let errorMessage = "Login failed";
@@ -49,11 +64,13 @@ const LandlordLogin = () => {
         throw new Error(errorMessage);
       }
 
+      // Verify the response is in JSON format
       const contentType = response.headers.get("Content-Type");
       if (!contentType || !contentType.includes("application/json")) {
         throw new Error("Invalid response format: Expected JSON");
       }
 
+      // Parse the response body
       const text = await response.text();
       if (!text) {
         throw new Error("Empty response from server");
@@ -62,15 +79,18 @@ const LandlordLogin = () => {
       const data = JSON.parse(text);
       console.log("Login response:", data);
 
+      // Check for errors in the response data
       if (data.error) {
         throw new Error(data.error);
       }
 
+      // Extract the JWT token from the response
       const token = data.token;
       if (token) {
-        localStorage.setItem("token", token);
-        console.log("Token stored:", token);
+        // Use the login function from UserContext to handle token and update user state
+        login(token);
 
+        // Decode the token to extract the role
         let role = "LANDLORD";
         let decodedToken;
         try {
@@ -80,18 +100,18 @@ const LandlordLogin = () => {
           console.log("Decoded role:", role);
           const expirationDate = new Date(decodedToken.exp * 1000);
           console.log("Token expiration:", expirationDate.toISOString());
+
+          // Check if the token is already expired
+          if (expirationDate < new Date()) {
+            throw new Error("Token has expired");
+          }
         } catch (decodeError) {
           console.warn("Failed to decode token:", decodeError.message);
+          localStorage.removeItem("token");
+          throw new Error("Invalid token");
         }
 
-        // Update UserContext with the logged-in user
-        setUser({
-          email: decodedToken.sub,
-          role: role,
-          id: decodedToken.id,
-        });
-
-        // Redirect based on role
+        // Redirect based on the user's role
         if (role === "LANDLORD") {
           navigate("/dashboard/landlord", { replace: true });
         } else if (role === "TENANT") {
@@ -109,6 +129,7 @@ const LandlordLogin = () => {
         setError("No token received from server");
       }
     } catch (err) {
+      // Handle network errors (e.g., server down)
       if (err.message.includes("Failed to fetch")) {
         setError(
           "Unable to connect to the server. Please check your network or try again later."
@@ -122,12 +143,14 @@ const LandlordLogin = () => {
     }
   };
 
+  // Render the login page
   return (
     <div
       className={`flex h-screen ${
         darkMode ? "bg-gray-900 text-gray-200" : "bg-white text-gray-900"
       }`}
     >
+      {/* Left Section: Decorative Image (Visible on large screens) */}
       <div className="hidden lg:flex w-1/2 relative">
         <img
           src={LandlordImage}
@@ -153,6 +176,7 @@ const LandlordLogin = () => {
         </div>
       </div>
 
+      {/* Right Section: Login Form */}
       <div
         className={`w-full lg:w-1/2 flex flex-col justify-center items-center p-8 ${
           darkMode ? "bg-gray-900" : "bg-white"
@@ -166,6 +190,7 @@ const LandlordLogin = () => {
           Landlord Login
         </h2>
 
+        {/* Error Message Display */}
         {error && (
           <div
             className={`w-full max-w-md mb-4 p-3 rounded-md ${
@@ -178,14 +203,15 @@ const LandlordLogin = () => {
           </div>
         )}
 
+        {/* Login Form */}
         <form className="w-full max-w-md space-y-4" onSubmit={handleLogin}>
           <input
             type="email"
             name="email"
             placeholder="Email Address"
             autoComplete="email"
-            value={email} // Add controlled input
-            onChange={(e) => setEmail(e.target.value)} // Add onChange handler
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             className={`w-full p-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-${
               darkMode ? "blue-400" : "black"
             } ${
@@ -200,8 +226,8 @@ const LandlordLogin = () => {
             name="password"
             placeholder="Password"
             autoComplete="current-password"
-            value={password} // Add controlled input
-            onChange={(e) => setPassword(e.target.value)} // Add onChange handler
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
             className={`w-full p-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-${
               darkMode ? "blue-400" : "black"
             } ${
@@ -222,6 +248,7 @@ const LandlordLogin = () => {
             {loading ? <span className="loader w-5 h-5"></span> : "Login"}
           </Button>
 
+          {/* Divider for alternative login options */}
           <div className="flex items-center justify-center gap-2">
             <div
               className={`border-b ${
@@ -242,6 +269,7 @@ const LandlordLogin = () => {
             ></div>
           </div>
 
+          {/* Google Sign-In Button (Disabled) */}
           <Button
             variant="secondary"
             type="button"
@@ -254,6 +282,7 @@ const LandlordLogin = () => {
             Sign in with Google
           </Button>
 
+          {/* Link to Sign Up */}
           <p
             className={`text-sm text-center ${
               darkMode ? "text-gray-400" : "text-gray-600"

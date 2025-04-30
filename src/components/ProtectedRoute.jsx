@@ -110,9 +110,10 @@
 
 // export default ProtectedRoute;
 // src/components/ProtectedRoute.jsx (assumed)
-import PropTypes from "prop-types"; // Add PropTypes import
+
+import PropTypes from "prop-types";
 import { Navigate } from "react-router-dom";
-import { useUser } from "../context/UserContext"; // Fix import to use UserContext
+import { useUser } from "../context/useUser"; // Correct path since ProtectedRoute.jsx is in src/components/
 
 const ProtectedRoute = ({ children, redirectTo }) => {
   const { user, loading } = useUser();
@@ -128,10 +129,9 @@ const ProtectedRoute = ({ children, redirectTo }) => {
   return children;
 };
 
-// Add PropTypes validation
 ProtectedRoute.propTypes = {
-  children: PropTypes.node.isRequired, // Validate children as a React node
-  redirectTo: PropTypes.string.isRequired, // Validate redirectTo as a string
+  children: PropTypes.node.isRequired,
+  redirectTo: PropTypes.string.isRequired,
 };
 
 export default ProtectedRoute;
