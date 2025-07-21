@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import GlobalSkeleton from "../../../../components/GlobalSkeleton";
 import Button from "../../../../components/Button";
-import landlordApi from "../../../../api/landlordApi";
+import landlordApi from "../../../../api/landlord/landlordApi";
 import { useDarkMode } from "../../../../context/DarkModeContext";
 
 /**

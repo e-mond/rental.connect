@@ -2,17 +2,21 @@ import { useOutletContext } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
-import landlordApi from "../../../../api/landlordApi";
+import landlordApi from "../../../../api/landlord/landlordApi";
 import Button from "../../../../components/Button";
 import GlobalSkeleton from "../../../../components/GlobalSkeleton";
 import { useDarkMode } from "../../../../context/DarkModeContext";
+import { FaExclamationCircle } from "react-icons/fa";
 
 /**
  * LeaseRenewals component displays a list of upcoming lease renewals for the landlord.
  * Features:
+ * - Fetches lease renewals using landlordApi with Tanstack Query.
  * - Dark mode support for consistent UI theming.
- * - Uses the Button component for navigation and retry actions.
- * - Verifies BASE_URL usage in API calls via landlordApi.
+ * - Uses Button component for navigation and retry actions.
+ * - Enhanced empty and error states with icon and message.
+ * - Minimum 2-second loading for UX consistency.
+ * - Displays tenant, property, renewal date, days remaining, rent, and status.
  */
 const LeaseRenewals = () => {
   const { user } = useOutletContext();
@@ -20,7 +24,7 @@ const LeaseRenewals = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
 
-  // Placeholder: Fetch lease renewals
+  // Fetch lease renewals using Tanstack Query
   const {
     data: leaseRenewals = [],
     error,
@@ -76,10 +80,21 @@ const LeaseRenewals = () => {
             darkMode ? "bg-gray-800" : "bg-gray-50"
           }`}
         >
-          <div className="flex flex-col items-center justify-center h-full space-y-4">
+          <div className="flex flex-col items-center justify-center h-64 space-y-4">
+            <FaExclamationCircle
+              size={40}
+              className={darkMode ? "text-red-400" : "text-red-500"}
+            />
             <p
-              className={`text-sm sm:text-base ${
+              className={`text-lg font-semibold ${
                 darkMode ? "text-red-400" : "text-red-500"
+              }`}
+            >
+              Error
+            </p>
+            <p
+              className={`text-sm text-center ${
+                darkMode ? "text-gray-400" : "text-gray-500"
               }`}
             >
               {errorMessage}
@@ -117,8 +132,9 @@ const LeaseRenewals = () => {
           }`}
         >
           Dashboard
-        </span>{" "}
-        &apos;{">"}&apos; Lease Renewals
+        </span>
+        <span className="mx-1">&gt;</span>
+        Lease Renewals
       </nav>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl sm:text-2xl font-bold">
@@ -133,10 +149,26 @@ const LeaseRenewals = () => {
         </Button>
       </div>
       {leaseRenewals.length === 0 ? (
-        <p className={darkMode ? "text-gray-400" : "text-gray-600"}>
-          This section will display all upcoming lease renewals. (Under
-          construction)
-        </p>
+        <div className="flex flex-col items-center justify-center h-64 space-y-4">
+          <FaExclamationCircle
+            size={40}
+            className={darkMode ? "text-gray-500" : "text-gray-400"}
+          />
+          <p
+            className={`text-lg font-semibold ${
+              darkMode ? "text-gray-300" : "text-gray-600"
+            }`}
+          >
+            No Upcoming Lease Renewals
+          </p>
+          <p
+            className={`text-sm text-center ${
+              darkMode ? "text-gray-400" : "text-gray-500"
+            }`}
+          >
+            Leases with 30 or fewer days remaining will appear here.
+          </p>
+        </div>
       ) : (
         <ul className="space-y-4">
           {leaseRenewals.map((renewal) => (
@@ -148,23 +180,44 @@ const LeaseRenewals = () => {
                   : "bg-white shadow-gray-200"
               }`}
             >
-              <h3 className="font-semibold">
-                {renewal.tenantName} - {renewal.propertyAddress}
-              </h3>
-              <p
-                className={`text-sm ${
-                  darkMode ? "text-gray-400" : "text-gray-500"
-                }`}
-              >
-                Renewal Date: {renewal.renewalDate}
-              </p>
-              <p
-                className={`text-sm ${
-                  darkMode ? "text-gray-400" : "text-gray-500"
-                }`}
-              >
-                Status: {renewal.status}
-              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <h3 className="font-semibold">
+                    {renewal.tenant} - {renewal.property}
+                  </h3>
+                  <p
+                    className={`text-sm ${
+                      darkMode ? "text-gray-400" : "text-gray-500"
+                    }`}
+                  >
+                    Renewal Date: {renewal.renewalDate}
+                  </p>
+                </div>
+                <div>
+                  <p
+                    className={`text-sm ${
+                      darkMode ? "text-gray-400" : "text-gray-500"
+                    }`}
+                  >
+                    Days Remaining: {renewal.daysRemaining}
+                  </p>
+                  <p
+                    className={`text-sm ${
+                      darkMode ? "text-gray-400" : "text-gray-500"
+                    }`}
+                  >
+                    Rent: $
+                    {renewal.rent != null ? renewal.rent.toFixed(2) : "N/A"}
+                  </p>
+                  <p
+                    className={`text-sm ${
+                      darkMode ? "text-gray-400" : "text-gray-500"
+                    }`}
+                  >
+                    Status: {renewal.status}
+                  </p>
+                </div>
+              </div>
             </li>
           ))}
         </ul>

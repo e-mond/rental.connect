@@ -5,7 +5,7 @@ import Button from "../../../../components/Button";
 import GlobalSkeleton from "../../../../components/GlobalSkeleton";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
 import PropTypes from "prop-types";
-import landlordApi from "../../../../api/landlordApi";
+import landlordApi from "../../../../api/landlord/landlordApi";
 import { useDarkMode } from "../../../../context/DarkModeContext";
 
 /**

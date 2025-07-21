@@ -1,4 +1,3 @@
-
 import React, { Suspense } from "react";
 import ReactDOM from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
@@ -11,6 +10,7 @@ import Contact from "./pages/Contact";
 import TenantLogin from "./pages/auth/TenantLogin";
 import LandlordLogin from "./pages/auth/LandlordLogin";
 import Signup from "./pages/auth/Signup";
+import ForgotPassword from "./pages/auth/ForgotPassword";
 // Import account success pages
 import TenantAccountSuccess from "./pages/TenantAccountSuccess";
 import LandlordAccountSuccess from "./pages/LandlordAccountSuccess";
@@ -26,10 +26,18 @@ import TenantSearch from "./dashboards/tenantdashboard/pages/Search";
 import PropertyDetails from "./dashboards/tenantdashboard/pages/PropertyDetails";
 import TenantApplications from "./dashboards/tenantdashboard/pages/Applications";
 import TenantMessages from "./dashboards/tenantdashboard/pages/Messages";
+import TenantMessageDetail from "./dashboards/tenantdashboard/pages/MessageDetail";
+import ComposeMessage from "./dashboards/tenantdashboard/pages/ComposeMessage";
 import TenantPayments from "./dashboards/tenantdashboard/pages/Payments";
 import Profile from "./dashboards/tenantdashboard/pages/Profile";
 import TenantSettings from "./dashboards/tenantdashboard/pages/Settings";
 import TenantMaintenance from "./dashboards/tenantdashboard/pages/Maintenance";
+import SubmitMaintenanceRequest from "./dashboards/tenantdashboard/pages/SubmitMaintenanceRequest";
+import TenantNotifications from "./dashboards/tenantdashboard/pages/TenantNotifications";
+// Import new tenant action pages
+import ScheduleViewing from "./dashboards/tenantdashboard/pages/ScheduleViewing";
+import ApplyNow from "./dashboards/tenantdashboard/pages/ApplyNow";
+// import MaintenanceRequest from "./dashboards/tenantdashboard/pages/MaintenanceRequest";
 // Import landlord dashboard components
 import LandlordDashboard from "./dashboards/landlorddashboard/pages/Landlord/LandlordDashboard";
 import LandlordDashboardHome from "./dashboards/landlorddashboard/pages/Landlord/LandlordDashboardHome";
@@ -49,8 +57,7 @@ import Ratings from "./dashboards/landlorddashboard/pages/Landlord/Ratings";
 import LeaseRenewals from "./dashboards/landlorddashboard/pages/Landlord/LeaseRenewals";
 import ConnectedAccounts from "./dashboards/landlorddashboard/pages/management/subpages/ConnectedAccounts";
 import LoginActivity from "./dashboards/landlorddashboard/pages/management/subpages/LoginActivity";
-import Subscription from "./dashboards/landlorddashboard/pages/management/subpages/Subscription";
-import PaymentMethods from "./dashboards/landlorddashboard/pages/management/subpages/PaymentMethods";
+import LandlordNotifications from "./dashboards/landlorddashboard/pages/Landlord/LandlordNotifications";
 
 // Define the app's routing configuration using createBrowserRouter
 const router = createBrowserRouter([
@@ -65,6 +72,8 @@ const router = createBrowserRouter([
       { path: "tenantlogin", element: <TenantLogin /> },
       { path: "landlordlogin", element: <LandlordLogin /> },
       { path: "signup", element: <Signup /> },
+      { path: "forgotpassword", element: <ForgotPassword /> },
+      { path: "not-found", element: <NotFound /> }, // Added explicit route for NotFound
       { path: "account-success/tenant", element: <TenantAccountSuccess /> },
       {
         path: "account-success/landlord",
@@ -72,7 +81,7 @@ const router = createBrowserRouter([
           <ProtectedRoute redirectTo="/landlordlogin">
             <LandlordAccountSuccess />
           </ProtectedRoute>
-        ), // Protected route for landlord account success
+        ),
       },
       { path: "auth/:userType", element: <AuthPage /> },
       { path: "landlord-signup", element: <LandlordAuth isSignUp /> },
@@ -82,17 +91,24 @@ const router = createBrowserRouter([
           <ProtectedRoute redirectTo="/tenantlogin">
             <TenantDashboard />
           </ProtectedRoute>
-        ), // Protected tenant dashboard route
+        ),
         children: [
           { index: true, element: <TenantDashboardHome /> },
           { path: "search", element: <TenantSearch /> },
           { path: "property/:id", element: <PropertyDetails /> },
           { path: "applications", element: <TenantApplications /> },
           { path: "messages", element: <TenantMessages /> },
+          { path: "messages/:messageId", element: <TenantMessageDetail /> },
+          { path: "compose", element: <ComposeMessage /> },
           { path: "payments", element: <TenantPayments /> },
           { path: "profile", element: <Profile /> },
           { path: "settings", element: <TenantSettings /> },
           { path: "maintenance", element: <TenantMaintenance /> },
+          { path: "maintenance/submit", element: <SubmitMaintenanceRequest /> },
+          { path: "notifications", element: <TenantNotifications /> },
+          { path: "scheduleviewing", element: <ScheduleViewing /> },
+          { path: "applynow", element: <ApplyNow /> },
+          // { path: "maintenance-request", element: <MaintenanceRequest /> },
         ],
       },
       {
@@ -101,7 +117,7 @@ const router = createBrowserRouter([
           <ProtectedRoute redirectTo="/landlordlogin">
             <LandlordDashboard />
           </ProtectedRoute>
-        ), // Protected landlord dashboard route
+        ),
         children: [
           { index: true, element: <LandlordDashboardHome /> },
           { path: "properties", element: <Properties /> },
@@ -122,15 +138,16 @@ const router = createBrowserRouter([
             path: "settings/security/login-activity",
             element: <LoginActivity />,
           },
-          { path: "settings/billing/subscription", element: <Subscription /> },
-          {
-            path: "settings/billing/payment-methods",
-            element: <PaymentMethods />,
-          },
+          // { path: "settings/billing/subscription", element: <Subscription /> },
+          // {
+          //   path: "settings/billing/payment-methods",
+          //   element: <PaymentMethods />,
+          // },
           { path: "profile", element: <LandlordProfile /> },
           { path: "ratings", element: <Ratings /> },
           { path: "lease-renewals", element: <LeaseRenewals /> },
           { path: "revenue", element: <Revenue /> },
+          { path: "notifications", element: <LandlordNotifications /> },
         ],
       },
       { path: "*", element: <NotFound /> }, // Catch-all route for 404

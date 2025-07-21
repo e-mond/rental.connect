@@ -32,8 +32,11 @@ function App() {
   // State to control the loading spinner during route transitions
   const [loading, setLoading] = useState(false);
 
-  // List of routes where the footer should be hidden (e.g., dashboard pages)
-  const dashboardRoutes = [
+  // List of routes where both navbar and footer should be hidden
+  const hideNavAndFooterRoutes = ["/forgotpassword", "/not-found"];
+
+  // List of routes where only the footer should be hidden (e.g., dashboard pages)
+  const hideFooterRoutes = [
     "/dashboard/tenant",
     "/dashboard/landlord",
     "/account-success/tenant",
@@ -41,10 +44,15 @@ function App() {
     "/dashboard",
   ];
 
-  // Check if the current route is a dashboard route to hide the footer
-  const shouldHideFooter = dashboardRoutes.some((route) =>
-    location.pathname.startsWith(route)
-  );
+  // Check if navbar and footer should be hidden (e.g., NotFound, ForgotPassword)
+  const shouldHideNavAndFooter =
+    hideNavAndFooterRoutes.includes(location.pathname) ||
+    location.pathname === "*"; // Handle 404 routes
+
+  // Check if only the footer should be hidden (e.g., dashboard routes)
+  const shouldHideFooter =
+    shouldHideNavAndFooter ||
+    hideFooterRoutes.some((route) => location.pathname.startsWith(route));
 
   // Handle route transitions by showing a loading spinner for 2 seconds
   useEffect(() => {
@@ -81,15 +89,15 @@ function App() {
             )}
             {/* Main app container with dynamic dark/light mode styling */}
             <div className="min-h-screen bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-200 transition-colors duration-300">
-              {/* Render the navigation bar */}
-              <Navbar />
+              {/* Conditionally render the navigation bar */}
+              {!shouldHideNavAndFooter && <Navbar />}
               {/* Wrap main content in an error boundary to catch runtime errors */}
               <ErrorBoundary customMessage="An error occurred in the main app. Please try again.">
                 <main className="min-h-screen">
                   {/* Render child routes defined in the router */}
                   <Outlet />
                 </main>
-                {/* Conditionally render the footer for non-dashboard routes */}
+                {/* Conditionally render the footer */}
                 {!shouldHideFooter && <Footer />}
                 {/* Render back-to-top button for scrolling convenience */}
                 <BackToTop />

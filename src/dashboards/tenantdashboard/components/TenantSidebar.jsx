@@ -15,9 +15,8 @@ import {
   ArrowLeftOnRectangleIcon,
 } from "@heroicons/react/24/outline";
 import GlobalSkeleton from "../../../components/skeletons/GlobalSkeleton";
-import { DEFAULT_PROFILE_PIC, DASHBOARD_BASE_URL } from "../../../config";
+import { DASHBOARD_BASE_URL } from "../../../config";
 import { useDarkMode } from "../../../context/DarkModeContext";
-
 
 const TenantSidebar = ({ isOpen, setIsOpen, user, isLoading }) => {
   const location = useLocation();
@@ -87,7 +86,7 @@ const TenantSidebar = ({ isOpen, setIsOpen, user, isLoading }) => {
     },
     {
       name: "Settings",
-      path: `${DASHBOARD_BASE_URL}/tenant/settings`, // Ensure this matches router
+      path: `${DASHBOARD_BASE_URL}/tenant/settings`,
       icon: CogIcon,
     },
   ];
@@ -98,8 +97,16 @@ const TenantSidebar = ({ isOpen, setIsOpen, user, isLoading }) => {
   };
 
   const handleNavigation = (path, name) => {
-    console.log(`Navigating to: ${path} (${name})`); // Debug navigation
+    console.log(`Navigating to: ${path} (${name})`);
     navigate(path);
+  };
+
+  // Get user initials for avatar (adapted from Navbar)
+  const getUserInitials = () => {
+    if (!user) return "";
+    const first = user.firstName?.charAt(0).toUpperCase() || "";
+    const last = user.lastName?.charAt(0).toUpperCase() || "";
+    return `${first}${last}`;
   };
 
   return (
@@ -144,7 +151,7 @@ const TenantSidebar = ({ isOpen, setIsOpen, user, isLoading }) => {
             >
               <Link
                 to={path}
-                onClick={() => handleNavigation(path, name)} // Debug navigation
+                onClick={() => handleNavigation(path, name)}
                 className="flex items-center space-x-5"
               >
                 <Icon className="w-6 h-6" />
@@ -189,15 +196,20 @@ const TenantSidebar = ({ isOpen, setIsOpen, user, isLoading }) => {
             to={`${DASHBOARD_BASE_URL}/tenant/profile`}
             className="flex items-center space-x-5"
           >
-            <img
-              src={user?.profilePic || DEFAULT_PROFILE_PIC}
-              alt="Profile"
-              className="w-10 h-10 rounded-full"
-            />
+            {/* Replace img with avatar displaying initials */}
+            <div
+              className={`w-10 h-10 rounded-full flex items-center justify-center border-2 text-base font-semibold ${
+                darkMode
+                  ? "border-gray-600 bg-gray-700 text-gray-200"
+                  : "border-gray-300 bg-gray-100 text-gray-800"
+              }`}
+            >
+              {getUserInitials() || <UserIcon className="w-6 h-6" />}
+            </div>
             {isOpen && (
               <div>
                 <p className="text-sm sm:text-base font-semibold">
-                  {user?.username || user?.name || "User"} {/* Use username */}
+                  {user?.username || user?.name || "User"}
                 </p>
                 <p
                   className={`text-xs sm:text-sm ${
@@ -236,8 +248,11 @@ TenantSidebar.propTypes = {
   user: PropTypes.shape({
     profilePic: PropTypes.string,
     name: PropTypes.string,
-    username: PropTypes.string, // Added username to PropTypes
+    username: PropTypes.string,
     accountType: PropTypes.string,
+    // Add firstName and lastName to PropTypes for initials
+    firstName: PropTypes.string,
+    lastName: PropTypes.string,
   }),
   isLoading: PropTypes.bool,
 };

@@ -15,7 +15,7 @@ import { useUser } from "../../context/useUser";
 
 // Country codes with emoji flags for phone number input
 const countryCodes = [
-  { code: "+233", country: "Ghana", flag: "🇬🇭" }, // Default
+  { code: "+233", country: "Ghana", flag: "🇬🇭" },
   { code: "+254", country: "Kenya", flag: "🇰🇪" },
   { code: "+234", country: "Nigeria", flag: "🇳🇬" },
   { code: "+27", country: "South Africa", flag: "🇿🇦" },
@@ -32,17 +32,11 @@ const countryCodes = [
   { code: "+54", country: "Argentina", flag: "🇦🇷" },
 ];
 
-/**
- * Signup component for user registration as either a tenant or landlord.
- * Integrates with the backend `/api/auth/signup` endpoint to create a new user,
- * handles JWT token storage, and provides robust error handling for production.
- */
 const Signup = () => {
-  const navigate = useNavigate(); // Hook for programmatic navigation
-  const { darkMode } = useDarkMode(); // Access dark mode state from context
-  const { login } = useUser(); // Access login function from UserContext to handle token
+  const navigate = useNavigate();
+  const { darkMode } = useDarkMode();
+  const { login } = useUser();
 
-  // State for user type (tenant or landlord) and form data
   const [userType, setUserType] = useState("tenant");
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -58,13 +52,8 @@ const Signup = () => {
     rentalHistory: "",
     countryCode: "+233",
   });
-  const [passwordStrength, setPasswordStrength] = useState(""); // State for password strength
+  const [passwordStrength, setPasswordStrength] = useState("");
 
-  /**
-   * Checks the strength of the password based on length, uppercase, lowercase, numbers, and special characters.
-   * @param {string} password - The password to evaluate
-   * @returns {string} - The password strength ("Weak", "Medium", or "Strong")
-   */
   const checkPasswordStrength = (password) => {
     const minLength = 8;
     const hasUpperCase = /[A-Z]/.test(password);
@@ -84,20 +73,10 @@ const Signup = () => {
     return "Weak";
   };
 
-  /**
-   * Sanitizes input by removing potentially dangerous characters (<, >, {, }).
-   * @param {string} input - The input string to sanitize
-   * @returns {string} - The sanitized input
-   */
   const sanitizeInput = (input) => {
     return input.replace(/[<>{}]/g, "");
   };
 
-  /**
-   * Handles changes to form inputs and updates the formData state.
-   * Also checks password strength if the password field is changed.
-   * @param {Event} e - The input change event
-   */
   const handleChange = (e) => {
     const { name, value } = e.target;
     const sanitizedValue = sanitizeInput(value);
@@ -107,37 +86,34 @@ const Signup = () => {
     }
   };
 
-  /**
-   * Handles changes to the country code dropdown and updates the formData state.
-   * @param {Event} e - The select change event
-   */
   const handleCountryCodeChange = (e) => {
     setFormData((prev) => ({ ...prev, countryCode: e.target.value }));
   };
 
-  // Mutation for handling signup API call using React Query
   const signupMutation = useMutation({
-    mutationFn: (payload) => authApi.signup(payload), // Function to call the signup API
-    mutationKey: ["signup"], // Unique key for the mutation
-    timeout: 10000, // Timeout after 10 seconds
+    mutationFn: (payload) => authApi.signup(payload),
+    mutationKey: ["signup"],
+    timeout: 10000,
     onSuccess: (data) => {
-      // Log the full response for debugging
-      console.log("Signup onSuccess - Full response data:", data);
-      // Check if the response contains a token
-      if (!data || !data.token) {
-        console.error("No token in response:", data);
+      console.log("Signup onSuccess - User registered:", {
+        userId: data.user?.id,
+        email: data.user?.email,
+        role: data.user?.role,
+      });
+      if (!data || !data.accessToken) {
+        console.error("No access token in response:", data);
         toast.error("Signup successful, but no token received. Please log in.");
         navigate(`/${userType}login`);
         return;
       }
 
-      // Log the user in using the token
-      login(data.token);
-
-      // Log the token for debugging
       try {
-        const decodedToken = jwtDecode(data.token);
-        console.log("Decoded token payload:", decodedToken);
+        const decodedToken = jwtDecode(data.accessToken);
+        console.log("Decoded token payload:", {
+          userId: decodedToken.userId,
+          email: decodedToken.sub,
+          role: decodedToken.role,
+        });
         const expirationDate = new Date(decodedToken.exp * 1000);
         console.log("Token expiration:", expirationDate.toISOString());
       } catch (decodeError) {
@@ -145,7 +121,9 @@ const Signup = () => {
         toast.warn("Token decoding failed, but signup was successful.");
       }
 
-      // Show success notification
+      // Login with the token, indicating this is a post-signup flow
+      login(data.accessToken, data.user?.role, true);
+
       toast.success("Signup successful!");
       console.log(
         "Navigating to:",
@@ -153,7 +131,6 @@ const Signup = () => {
           ? "/account-success/tenant"
           : "/account-success/landlord"
       );
-      // Redirect to the account success page based on user type
       setTimeout(() => {
         navigate(
           userType === "tenant"
@@ -164,14 +141,19 @@ const Signup = () => {
       }, 500);
     },
     onError: (err) => {
-      // Handle errors during signup
       console.error("Signup onError:", err);
       let errorMessage = "An error occurred during signup";
       if (err.response) {
         const { status, data } = err.response;
         console.log("Error response details:", { status, data });
-        if (status === 400 && data.message) {
-          errorMessage = data.message;
+        if (status === 400) {
+          if (data.error === "businessName is required for landlords") {
+            errorMessage = "Business Name is required for landlord accounts.";
+          } else if (data.error) {
+            errorMessage = data.error;
+          } else {
+            errorMessage = "Invalid signup data. Please check your inputs.";
+          }
         } else if (status === 500) {
           errorMessage = "Server error. Please try again later.";
         } else {
@@ -187,27 +169,19 @@ const Signup = () => {
       toast.error(errorMessage);
     },
     onSettled: () => {
-      // Reset loading state after the mutation completes
       setLoading(false);
     },
   });
 
-  /**
-   * Handles form submission for signup.
-   * Validates form inputs, constructs the payload, and triggers the signup mutation.
-   * @param {Event} e - The form submission event
-   */
   const handleSignup = async (e) => {
     e.preventDefault();
     setLoading(true);
 
-    // Validate passwords match
     if (formData.password !== formData.confirmPassword) {
       toast.error("Passwords do not match");
       setLoading(false);
       return;
     }
-    // Validate email format
     if (
       !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(formData.email)
     ) {
@@ -215,13 +189,11 @@ const Signup = () => {
       setLoading(false);
       return;
     }
-    // Validate password length
     if (formData.password.length < 8) {
       toast.error("Password must be at least 8 characters long");
       setLoading(false);
       return;
     }
-    // Validate password strength
     if (passwordStrength === "Weak") {
       toast.error(
         "Password is too weak. Please include uppercase, lowercase, numbers, and special characters."
@@ -229,7 +201,6 @@ const Signup = () => {
       setLoading(false);
       return;
     }
-    // Validate phone number format if provided
     if (formData.contact) {
       const phonePattern = /^\d{7,15}$/;
       if (!phonePattern.test(formData.contact)) {
@@ -238,20 +209,17 @@ const Signup = () => {
         return;
       }
     }
-    // Validate business name for landlords
     if (userType === "landlord" && !formData.businessName) {
       toast.error("Business Name is required for landlords");
       setLoading(false);
       return;
     }
-    // Validate first name
     if (!formData.firstName) {
       toast.error("First Name is required");
       setLoading(false);
       return;
     }
 
-    // Construct the signup payload
     const payload = {
       email: formData.email.trim().toLowerCase(),
       password: formData.password,
@@ -278,11 +246,15 @@ const Signup = () => {
       }),
     };
 
-    console.log("Signup payload:", payload);
-    signupMutation.mutate(payload); // Trigger the signup mutation
+    console.log("Signup payload:", {
+      email: payload.email,
+      role: payload.role,
+      firstName: payload.firstName,
+      ...(payload.businessName && { businessName: payload.businessName }),
+    });
+    signupMutation.mutate(payload);
   };
 
-  // Render a loading skeleton while the signup request is in progress
   if (loading) {
     return (
       <div className="flex h-screen">
@@ -297,10 +269,8 @@ const Signup = () => {
     );
   }
 
-  // Render the signup form
   return (
     <div className="flex h-max">
-      {/* Left Section: Decorative Image (Visible on large screens) */}
       <div className="hidden lg:flex w-1/2 relative">
         <img
           src={userType === "tenant" ? TenantImage : LandlordImage}
@@ -335,7 +305,6 @@ const Signup = () => {
         </div>
       </div>
 
-      {/* Right Section: Signup Form */}
       <div
         className={`w-full lg:w-1/2 flex flex-col justify-center items-center p-6 ${
           darkMode ? "bg-gray-900 text-gray-200" : "bg-white text-black"
@@ -343,7 +312,6 @@ const Signup = () => {
       >
         <h2 className="text-2xl font-bold mb-4">Create an Account</h2>
 
-        {/* User Type Selection Buttons */}
         <div className="flex space-x-4 mb-4">
           <Button
             variant={userType === "tenant" ? "primary" : "secondary"}
@@ -363,7 +331,6 @@ const Signup = () => {
           </Button>
         </div>
 
-        {/* Signup Form */}
         <form
           className={`w-full max-w-md p-6 rounded-lg border shadow-lg ${
             darkMode
@@ -372,7 +339,6 @@ const Signup = () => {
           }`}
           onSubmit={handleSignup}
         >
-          {/* Display error message if signup fails */}
           {signupMutation.isError && (
             <div className="mb-4">
               <ErrorDisplay error={signupMutation.error} />
@@ -505,7 +471,6 @@ const Signup = () => {
             </div>
           </div>
 
-          {/* Additional fields for landlords */}
           {userType === "landlord" && (
             <div className="space-y-4">
               <input
@@ -537,7 +502,6 @@ const Signup = () => {
             </div>
           )}
 
-          {/* Additional fields for tenants */}
           {userType === "tenant" && (
             <div className="space-y-4">
               <input
