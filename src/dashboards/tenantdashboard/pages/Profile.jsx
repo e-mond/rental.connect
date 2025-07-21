@@ -3,18 +3,18 @@ import {
   FiMail,
   FiPhone,
   FiHome,
-  // FiUpload,
   FiEdit2,
   FiCalendar,
   FiMessageSquare,
   FiAlertCircle,
+  FiUser,
 } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDarkMode } from "../../../context/DarkModeContext";
 import GlobalSkeleton from "../../../components/GlobalSkeleton";
 import Button from "../../../components/Button";
-import { BASE_URL } from "../../../config";
+import tenantApi from "../../../api/tenant/tenantApi";
 
 const Profile = () => {
   const { darkMode } = useDarkMode();
@@ -33,6 +33,7 @@ const Profile = () => {
     fullName: "",
     firstName: "",
     lastName: "",
+    customId: "", // New field for custom ID
   });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editField, setEditField] = useState("");
@@ -54,6 +55,7 @@ const Profile = () => {
     dateOfBirth,
     preferredContact,
     emergencyContact,
+    customId,
   }) =>
     ([
       profilePic,
@@ -64,9 +66,27 @@ const Profile = () => {
       dateOfBirth,
       preferredContact,
       emergencyContact,
+      customId,
     ].filter(Boolean).length /
-      8) *
+      9) *
     100;
+
+  const parseDate = (dateValue) => {
+    try {
+      if (Array.isArray(dateValue)) {
+        // Handle array format (e.g., [2025, 5, 10, 7, 34, 47, 225000000])
+        const [year, month, day, hour, minute, second, nano] = dateValue;
+        return new Date(
+          Date.UTC(year, month - 1, day, hour, minute, second, nano / 1000000)
+        );
+      }
+      // Handle ISO 8601 string
+      return new Date(dateValue);
+    } catch (err) {
+      console.error("Failed to parse date:", dateValue, err);
+      return new Date(); // Fallback to current date
+    }
+  };
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -75,31 +95,22 @@ const Profile = () => {
         throw new Error("No authentication token found. Please log in.");
       }
 
-      const response = await fetch(`${BASE_URL}/api/users/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
+      const controller = new AbortController();
+      const data = await tenantApi.withRetry(
+        tenantApi.fetchProfile,
+        [token, controller.signal],
+        3,
+        2000
+      );
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(
-          `Failed to fetch profile: ${errorText || "Unknown error"} (HTTP ${
-            response.status
-          })`
-        );
-      }
-
-      const data = await response.json();
       console.log("Profile API response:", data);
       const createdAt = data.createdAt
-        ? new Date(data.createdAt).toISOString()
+        ? parseDate(data.createdAt).toISOString()
         : new Date().toISOString();
       const updatedProfile = {
         username: data.username || data.name || "",
         email: data.email || "",
-        phone: data.phone || "",
+        phone: data.phoneNumber || data.phone || "",
         address: data.address || "",
         dateOfBirth: data.dateOfBirth || "",
         preferredContact: data.preferredContact || "",
@@ -110,15 +121,27 @@ const Profile = () => {
         fullName: data.fullName || "",
         firstName: data.firstName || "",
         lastName: data.lastName || "",
+        customId: data.customId || "", // Include customId
       };
       setProfile(updatedProfile);
       setProfilePicPreview(data.profilePic || null);
       setProgress(calculateProgress(updatedProfile));
     } catch (err) {
       console.error("Failed to fetch profile:", err);
-      setError(err.message);
+      setError(
+        err.type === "auth"
+          ? "Your session appears to be invalid. Please log in again to continue."
+          : err.type === "network"
+          ? "We’re having trouble connecting. Please check your network and try again."
+          : err.type === "server"
+          ? "The server is currently unavailable. Please try again later."
+          : err.message || "Failed to fetch profile."
+      );
       if (err.message.includes("token") || err.message.includes("401")) {
-        navigate("/tenantlogin");
+        localStorage.removeItem("token");
+        setTimeout(() => {
+          navigate("/tenantlogin");
+        }, 2000);
       }
     } finally {
       setLoading(false);
@@ -132,30 +155,35 @@ const Profile = () => {
         throw new Error("No authentication token found. Please log in.");
       }
 
-      const formData = new FormData();
-      formData.append("profilePic", profilePictureFile);
-
-      const response = await fetch(`${BASE_URL}/api/users/me/picture`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(
-          `Failed to upload profile picture: ${
-            errorText || "Unknown error"
-          } (HTTP ${response.status})`
-        );
+      if (!profilePictureFile) {
+        throw new Error("No profile picture file selected.");
       }
+
+      const controller = new AbortController();
+      await tenantApi.withRetry(
+        tenantApi.updateProfilePicture,
+        [token, profilePictureFile, controller.signal],
+        3,
+        2000
+      );
 
       await fetchProfile();
     } catch (err) {
       console.error("Failed to update profile picture:", err);
-      setError(err.message);
+      setError(
+        err.type === "auth"
+          ? "Your session appears to be invalid. Please log in again to continue."
+          : err.type === "network"
+          ? "We’re having trouble connecting. Please check your network and try again."
+          : err.type === "server"
+          ? "The server is currently unavailable. Please try again later."
+          : err.message || "Failed to update profile picture."
+      );
       if (err.message.includes("token") || err.message.includes("401")) {
-        navigate("/tenantlogin");
+        localStorage.removeItem("token");
+        setTimeout(() => {
+          navigate("/tenantlogin");
+        }, 2000);
       }
     }
   }, [profilePictureFile, fetchProfile, navigate]);
@@ -193,30 +221,31 @@ const Profile = () => {
       }
 
       const updatedProfile = { ...profile, [editField]: newValue };
-      const response = await fetch(`${BASE_URL}/api/users/me`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(updatedProfile),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(
-          `Failed to update profile: ${errorText || "Unknown error"} (HTTP ${
-            response.status
-          })`
-        );
-      }
+      const controller = new AbortController();
+      await tenantApi.withRetry(
+        tenantApi.updateProfile,
+        [token, updatedProfile, controller.signal],
+        3,
+        2000
+      );
 
       await fetchProfile();
     } catch (err) {
       console.error("Failed to update profile:", err);
-      setError(err.message);
+      setError(
+        err.type === "auth"
+          ? "Your session appears to be invalid. Please log in again to continue."
+          : err.type === "network"
+          ? "We’re having trouble connecting. Please check your network and try again."
+          : err.type === "server"
+          ? "The server is currently unavailable. Please try again later."
+          : err.message || "Failed to update profile."
+      );
       if (err.message.includes("token") || err.message.includes("401")) {
-        navigate("/tenantlogin");
+        localStorage.removeItem("token");
+        setTimeout(() => {
+          navigate("/tenantlogin");
+        }, 2000);
       }
     } finally {
       setIsModalOpen(false);
@@ -373,6 +402,12 @@ const Profile = () => {
           {/* Display Profile Fields */}
           {[
             {
+              label: "User ID",
+              value: profile.customId,
+              icon: FiUser,
+              field: "customId",
+            },
+            {
               label: "Email",
               value: profile.email,
               icon: FiMail,
@@ -419,16 +454,18 @@ const Profile = () => {
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => {
-                  setEditField(field);
-                  setNewValue(value || "");
-                  setIsModalOpen(true);
-                }}
-                className="text-blue-500 hover:text-blue-700"
-              >
-                <FiEdit2 />
-              </button>
+              {field !== "customId" && (
+                <button
+                  onClick={() => {
+                    setEditField(field);
+                    setNewValue(value || "");
+                    setIsModalOpen(true);
+                  }}
+                  className="text-blue-500 hover:text-blue-700"
+                >
+                  <FiEdit2 />
+                </button>
+              )}
             </div>
           ))}
         </div>

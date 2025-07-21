@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "react-toastify";
+import { saveAs } from "file-saver"; // Added for handling blob downloads
 import { Card, CardContent } from "../../../../components/Card";
 import Button from "../../../../components/Button";
 import GlobalSkeleton from "../../../../components/GlobalSkeleton";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
-import landlordApi from "../../../../api/landlordApi";
+import landlordApi from "../../../../api/landlord/landlordApi";
 import {
   FaFileAlt,
   FaCloudUploadAlt,
@@ -129,20 +130,28 @@ const Documents = () => {
     (doc) => doc.category === "contracts"
   ).length;
 
-  const handleDownload = (docName, docUrl) => {
-    if (!docUrl) {
-      toast.error("Document URL is missing.");
+  const handleDownload = async (docId, docName) => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      toast.error("Authentication token is missing. Please log in again.");
       return;
     }
-    // Construct the full URL using BASE_URL if necessary
-    const fullUrl = docUrl.startsWith("http")
-      ? docUrl
-      : `${landlordApi.baseUrl}${docUrl}`;
-    toast.info(`Downloading: ${docName || "Unnamed Document"} from ${fullUrl}`);
-    const link = document.createElement("a");
-    link.href = fullUrl;
-    link.download = docName || "document";
-    link.click();
+    if (!docId) {
+      toast.error("Document ID is missing.");
+      return;
+    }
+    try {
+      toast.info(`Downloading: ${docName || "Unnamed Document"}`);
+      const { blob } = await landlordApi.downloadDocument(
+        token,
+        docId,
+        docName
+      );
+      saveAs(blob, docName || "document");
+    } catch (error) {
+      console.error("[Documents] Download error:", error);
+      toast.error(`Failed to download document: ${error.message}`);
+    }
   };
 
   const handleEdit = (doc) => {
@@ -272,7 +281,7 @@ const Documents = () => {
           >
             Dashboard
           </span>
-          <span className="mx-2">&gt;</span>
+          <span className="mx-2">{">"}</span>
           Documents
         </nav>
         {/* Header Section */}
@@ -430,7 +439,7 @@ const Documents = () => {
                         ? "text-gray-400 hover:text-gray-200"
                         : "text-gray-500 hover:text-gray-700"
                     }`}
-                    onClick={() => handleDownload(doc.name, doc.url)}
+                    onClick={() => handleDownload(doc.id, doc.name)}
                     aria-label={`Download ${doc.name || "document"}`}
                   />
                   <FaEdit

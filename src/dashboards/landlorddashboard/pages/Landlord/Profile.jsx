@@ -14,7 +14,7 @@ import { useDarkMode } from "../../../../context/DarkModeContext";
 import GlobalSkeleton from "../../../../components/GlobalSkeleton";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
 import Button from "../../../../components/Button";
-import landlordApi from "../../../../api/landlordApi";
+import landlordApi from "../../../../api/landlord/landlordApi";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 

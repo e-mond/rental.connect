@@ -12,7 +12,7 @@ import {
 import PropTypes from "prop-types";
 import GlobalSkeleton from "../../../../components/GlobalSkeleton";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
-import landlordApi from "../../../../api/landlordApi";
+import landlordApi from "../../../../api/landlord/landlordApi";
 import { useDarkMode } from "../../../../context/DarkModeContext";
 import Button from "../../../../components/Button";
 

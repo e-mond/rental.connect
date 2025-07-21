@@ -1,6 +1,11 @@
 import PropTypes from "prop-types";
 
-const TenantSkeleton = ({ layout, bgColor, animationSpeed = "2s" }) => {
+const TenantSkeleton = ({
+  layout,
+  bgColor,
+  animationSpeed = "2s",
+  items = 3,
+}) => {
   const baseStyle = `${bgColor} animate-customPulse rounded`;
 
   switch (layout) {
@@ -106,47 +111,121 @@ const TenantSkeleton = ({ layout, bgColor, animationSpeed = "2s" }) => {
     case "payments":
       return (
         <div
-          className="p-4 space-y-6 bg-gray-100 overflow-hidden"
+          className="max-w-[80%] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 bg-gray-100 overflow-hidden"
           aria-hidden="true"
           style={{ "--animation-speed": animationSpeed }}
         >
           {/* Filter Tabs */}
-          <div className="flex space-x-4 overflow-x-auto pb-2">
-            {[...Array(3)].map((_, index) => (
+          <div className="flex flex-wrap gap-3 sm:gap-4 mt-10 sticky top-0 z-10 py-3 rounded-xl shadow-sm bg-gray-100">
+            {[...Array(4)].map((_, index) => (
               <div
                 key={`filter-tab-${index}`}
-                className={`${baseStyle} h-8 w-32`}
+                className={`${baseStyle} h-10 w-32 sm:w-40 rounded-lg shadow-sm`}
               />
             ))}
           </div>
 
           {/* Payment Cards */}
-          <div className="bg-white rounded-lg shadow-md p-4 space-y-4">
-            {[...Array(3)].map((_, index) => (
-              <div
-                key={`payment-card-${index}`}
-                className="p-4 border-b last:border-none rounded-lg mb-3 shadow-sm bg-gray-50"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className={`${baseStyle} h-8 w-8`} />
-                    <div>
-                      <div className={`${baseStyle} h-5 w-32 mb-1`} />
-                      <div className={`${baseStyle} h-4 w-24`} />
+          <div className="rounded-xl shadow-lg p-6 bg-white">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[...Array(items)].map((_, index) => (
+                <div
+                  key={`payment-card-${index}`}
+                  className="rounded-xl shadow-md p-5 bg-gray-50"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className={`${baseStyle} h-8 w-8 rounded-full`} />
+                      <div className="space-y-2">
+                        <div className={`${baseStyle} h-5 w-32 rounded`} />
+                        <div className={`${baseStyle} h-4 w-24 rounded`} />
+                        <div className={`${baseStyle} h-4 w-28 rounded`} />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className={`${baseStyle} h-5 w-20 rounded-full`} />
+                      <div className={`${baseStyle} h-6 w-6 rounded-full`} />
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className={`${baseStyle} h-5 w-20 rounded-lg`} />
-                    <div className={`${baseStyle} h-6 w-6 rounded-full`} />
+                  <div className="mt-4 space-y-2">
+                    <div className="flex justify-between">
+                      <div className={`${baseStyle} h-4 w-16 rounded`} />
+                      <div className={`${baseStyle} h-4 w-20 rounded`} />
+                    </div>
+                    <div className="flex justify-between">
+                      <div className={`${baseStyle} h-4 w-12 rounded`} />
+                      <div className={`${baseStyle} h-4 w-16 rounded`} />
+                    </div>
+                    <div className={`${baseStyle} h-10 w-full rounded-lg`} />
+                    <div className={`${baseStyle} h-10 w-full rounded-lg`} />
                   </div>
                 </div>
-                <div className="mt-4 space-y-2">
-                  <div className={`${baseStyle} h-4 w-1/2`} />
-                  <div className={`${baseStyle} h-10 w-full rounded-lg`} />
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
+
+          {/* Instructions Section */}
+          <section className="mt-10">
+            <div className={`${baseStyle} h-7 w-1/4 mb-6 rounded`} />
+            <div className={`${baseStyle} h-4 w-3/4 mb-2 rounded`} />
+            <div className={`${baseStyle} h-4 w-2/3 rounded`} />
+          </section>
+
+          {/* Payment Method Section */}
+          <section className="mt-6">
+            <div className={`${baseStyle} h-7 w-1/4 mb-6 rounded`} />
+            <div className="rounded-xl shadow-lg p-6 bg-white space-y-4">
+              {/* Payment Method Buttons */}
+              <div className="flex space-x-4 mb-4">
+                {[...Array(3)].map((_, index) => (
+                  <div
+                    key={`payment-method-btn-${index}`}
+                    className={`${baseStyle} h-10 w-28 sm:w-32 rounded-lg`}
+                  />
+                ))}
+              </div>
+
+              {/* Input Fields (Simulating Stripe as default) */}
+              <div className="space-y-4">
+                {[...Array(3)].map((_, index) => (
+                  <div key={`input-field-${index}`} className="relative">
+                    <div className={`${baseStyle} h-4 w-20 mb-1 rounded`} />
+                    <div className="relative">
+                      <div className={`${baseStyle} h-10 w-full rounded-lg`} />
+                      <div
+                        className={`${baseStyle} absolute right-3 top-11 transform -translate-y-1/2 h-4 w-4`}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Pay Now Button */}
+              <div className={`${baseStyle} h-10 w-full rounded-lg`} />
+            </div>
+          </section>
+        </div>
+      );
+
+    case "maintenance-list":
+      return (
+        <div
+          className="space-y-6 p-4 sm:p-6"
+          aria-hidden="true"
+          style={{ "--animation-speed": animationSpeed }}
+        >
+          {[...Array(items)].map((_, index) => (
+            <div
+              key={`maintenance-item-${index}`}
+              className={`border p-4 rounded-lg flex items-center space-x-4 ${baseStyle}`}
+            >
+              <div className={`${baseStyle} w-10 h-10 rounded-full`} />
+              <div className="flex-1 space-y-2">
+                <div className={`${baseStyle} h-5 w-3/4`} />
+                <div className={`${baseStyle} h-4 w-1/2`} />
+              </div>
+            </div>
+          ))}
         </div>
       );
 
@@ -160,6 +239,7 @@ TenantSkeleton.propTypes = {
   layout: PropTypes.string.isRequired,
   bgColor: PropTypes.string.isRequired,
   animationSpeed: PropTypes.string,
+  items: PropTypes.number,
 };
 
 export default TenantSkeleton;

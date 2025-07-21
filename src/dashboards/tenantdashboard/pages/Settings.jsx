@@ -11,7 +11,7 @@ import {
 } from "react-icons/fi";
 import { useDarkMode } from "../../../context/DarkModeContext";
 import Button from "../../../components/Button";
-import { BASE_URL } from "../../../config";
+import tenantApi from "../../../api/tenant/tenantApi";
 
 const TenantSettings = () => {
   const { darkMode, setDarkMode } = useDarkMode();
@@ -49,26 +49,20 @@ const TenantSettings = () => {
           throw new Error("No authentication token found. Please log in.");
         }
 
-        const response = await fetch(`${BASE_URL}/api/users/me/password`, {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            currentPassword: passwordForm.currentPassword,
-            newPassword: passwordForm.newPassword,
-          }),
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(
-            `Failed to update password: ${errorText || "Unknown error"} (HTTP ${
-              response.status
-            })`
-          );
-        }
+        const controller = new AbortController();
+        await tenantApi.withRetry(
+          tenantApi.updatePassword,
+          [
+            token,
+            {
+              currentPassword: passwordForm.currentPassword,
+              newPassword: passwordForm.newPassword,
+            },
+            controller.signal,
+          ],
+          3,
+          2000
+        );
 
         setSuccess("Password updated successfully.");
         setPasswordForm({
@@ -77,10 +71,20 @@ const TenantSettings = () => {
           confirmPassword: "",
         });
       } catch (err) {
-        console.error("Failed to update password:", err);
-        setError(err.message);
+        setError(
+          err.type === "auth"
+            ? "Your session appears to be invalid. Please log in again to continue."
+            : err.type === "network"
+            ? "We’re having trouble connecting. Please check your network and try again."
+            : err.type === "server"
+            ? "The server is currently unavailable. Please try again later."
+            : err.message || "Failed to update password."
+        );
         if (err.message.includes("token") || err.message.includes("401")) {
-          navigate("/tenantlogin");
+          localStorage.removeItem("token");
+          setTimeout(() => {
+            navigate("/tenantlogin");
+          }, 2000);
         }
       }
     },
@@ -101,31 +105,31 @@ const TenantSettings = () => {
           throw new Error("No authentication token found. Please log in.");
         }
 
-        const response = await fetch(`${BASE_URL}/api/users/me/notifications`, {
-          method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(updatedNotifications),
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(
-            `Failed to update notifications: ${
-              errorText || "Unknown error"
-            } (HTTP ${response.status})`
-          );
-        }
+        const controller = new AbortController();
+        await tenantApi.withRetry(
+          tenantApi.updateNotifications,
+          [token, updatedNotifications, controller.signal],
+          3,
+          2000
+        );
 
         setSuccess("Notification preferences updated successfully.");
       } catch (err) {
-        console.error("Failed to update notifications:", err);
         setNotifications(notifications); // Revert on error
-        setError(err.message);
+        setError(
+          err.type === "auth"
+            ? "Your session appears to be invalid. Please log in again to continue."
+            : err.type === "network"
+            ? "We’re having trouble connecting. Please check your network and try again."
+            : err.type === "server"
+            ? "The server is currently unavailable. Please try again later."
+            : err.message || "Failed to update notification preferences."
+        );
         if (err.message.includes("token") || err.message.includes("401")) {
-          navigate("/tenantlogin");
+          localStorage.removeItem("token");
+          setTimeout(() => {
+            navigate("/tenantlogin");
+          }, 2000);
         }
       }
     },
@@ -141,31 +145,31 @@ const TenantSettings = () => {
           throw new Error("No authentication token found. Please log in.");
         }
 
-        const response = await fetch(`${BASE_URL}/api/users/me/language`, {
-          method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ language: newLanguage }),
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(
-            `Failed to update language: ${errorText || "Unknown error"} (HTTP ${
-              response.status
-            })`
-          );
-        }
+        const controller = new AbortController();
+        await tenantApi.withRetry(
+          tenantApi.updateLanguage,
+          [token, { language: newLanguage }, controller.signal],
+          3,
+          2000
+        );
 
         setSuccess("Language updated successfully.");
       } catch (err) {
-        console.error("Failed to update language:", err);
         setLanguage(language); // Revert on error
-        setError(err.message);
+        setError(
+          err.type === "auth"
+            ? "Your session appears to be invalid. Please log in again to continue."
+            : err.type === "network"
+            ? "We’re having trouble connecting. Please check your network and try again."
+            : err.type === "server"
+            ? "The server is currently unavailable. Please try again later."
+            : err.message || "Failed to update language preference."
+        );
         if (err.message.includes("token") || err.message.includes("401")) {
-          navigate("/tenantlogin");
+          localStorage.removeItem("token");
+          setTimeout(() => {
+            navigate("/tenantlogin");
+          }, 2000);
         }
       }
     },
@@ -182,33 +186,33 @@ const TenantSettings = () => {
         throw new Error("No authentication token found. Please log in.");
       }
 
-      const response = await fetch(`${BASE_URL}/api/users/me/2fa`, {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ twoFactorEnabled: newState }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(
-          `Failed to update 2FA: ${errorText || "Unknown error"} (HTTP ${
-            response.status
-          })`
-        );
-      }
+      const controller = new AbortController();
+      await tenantApi.withRetry(
+        tenantApi.toggleTwoFactor,
+        [token, { twoFactorEnabled: newState }, controller.signal],
+        3,
+        2000
+      );
 
       setSuccess(
         `Two-factor authentication ${newState ? "enabled" : "disabled"}.`
       );
     } catch (err) {
-      console.error("Failed to update 2FA:", err);
       setTwoFactorEnabled(twoFactorEnabled); // Revert on error
-      setError(err.message);
+      setError(
+        err.type === "auth"
+          ? "Your session appears to be invalid. Please log in again to continue."
+          : err.type === "network"
+          ? "We’re having trouble connecting. Please check your network and try again."
+          : err.type === "server"
+          ? "The server is currently unavailable. Please try again later."
+          : err.message || "Failed to update 2FA settings."
+      );
       if (err.message.includes("token") || err.message.includes("401")) {
-        navigate("/tenantlogin");
+        localStorage.removeItem("token");
+        setTimeout(() => {
+          navigate("/tenantlogin");
+        }, 2000);
       }
     }
   }, [twoFactorEnabled, navigate]);
@@ -220,30 +224,31 @@ const TenantSettings = () => {
         throw new Error("No authentication token found. Please log in.");
       }
 
-      const response = await fetch(`${BASE_URL}/api/users/me`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(
-          `Failed to delete account: ${errorText || "Unknown error"} (HTTP ${
-            response.status
-          })`
-        );
-      }
+      const controller = new AbortController();
+      await tenantApi.withRetry(
+        tenantApi.deleteAccount,
+        [token, controller.signal],
+        3,
+        2000
+      );
 
       localStorage.clear();
       navigate("/tenantlogin");
     } catch (err) {
-      console.error("Failed to delete account:", err);
-      setError(err.message);
+      setError(
+        err.type === "auth"
+          ? "Your session appears to be invalid. Please log in again to continue."
+          : err.type === "network"
+          ? "We’re having trouble connecting. Please check your network and try again."
+          : err.type === "server"
+          ? "The server is currently unavailable. Please try again later."
+          : err.message || "Failed to delete account."
+      );
       if (err.message.includes("token") || err.message.includes("401")) {
-        navigate("/tenantlogin");
+        localStorage.removeItem("token");
+        setTimeout(() => {
+          navigate("/tenantlogin");
+        }, 2000);
       }
     } finally {
       setIsDeleteModalOpen(false);

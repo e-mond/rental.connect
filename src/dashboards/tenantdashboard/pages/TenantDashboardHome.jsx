@@ -2,22 +2,16 @@ import { useState, useEffect } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import PropTypes from "prop-types";
 import GlobalSkeleton from "../../../components/GlobalSkeleton";
-import {
-  FaHome,
-  FaFileAlt,
-  FaCreditCard,
-  FaUserPlus,
-  FaUserEdit,
-} from "react-icons/fa";
-import { useDarkMode } from "../../../context/DarkModeContext"; // Import useDarkMode
-import Button from "../../../components/Button"; // Import Button component
+import { FaHome, FaFileAlt, FaCreditCard } from "react-icons/fa";
+import { useDarkMode } from "../../../context/DarkModeContext";
+import Button from "../../../components/Button";
+import RecentActivity from "../components/RecentActivity"; // Import the RecentActivity component
 
 const TenantDashboardHome = () => {
   const { user, isLoading: contextLoading } = useOutletContext();
   const [loading, setLoading] = useState(true);
-  const [recentActivity, setRecentActivity] = useState([]);
   const navigate = useNavigate();
-  const { darkMode } = useDarkMode(); // Access dark mode state
+  const { darkMode } = useDarkMode();
 
   const userName =
     user?.fullName ||
@@ -33,59 +27,6 @@ const TenantDashboardHome = () => {
       return () => clearTimeout(timer);
     }
   }, [contextLoading]);
-
-  const calculateProgress = (userData) => {
-    let completedFields = 0;
-    const totalFields = 5;
-
-    if (userData.profilePic) completedFields++;
-    if (userData.name) completedFields++;
-    if (userData.email) completedFields++;
-    if (userData.phone) completedFields++;
-    if (userData.address) completedFields++;
-
-    return (completedFields / totalFields) * 100;
-  };
-
-  const getTimeDifference = (createdAt) => {
-    if (!createdAt) return "Unknown time";
-
-    const now = new Date();
-    const createdDate = new Date(createdAt);
-    const diffInMs = now - createdDate;
-    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
-
-    if (diffInMinutes < 1) return "Just now";
-    if (diffInMinutes < 60) return `${diffInMinutes} min ago`;
-    const diffInHours = Math.floor(diffInMinutes / 60);
-    if (diffInHours < 24)
-      return `${diffInHours} hour${diffInHours > 1 ? "s" : ""} ago`;
-    const diffInDays = Math.floor(diffInHours / 24);
-    return `${diffInDays} day${diffInDays > 1 ? "s" : ""} ago`;
-  };
-
-  useEffect(() => {
-    if (!user) return;
-
-    const progress = calculateProgress(user);
-    const activities = [];
-
-    if (user.createdAt) {
-      activities.push({
-        type: "account_created",
-        timestamp: getTimeDifference(user.createdAt),
-      });
-    }
-
-    if (progress < 100) {
-      activities.push({
-        type: "profile_completion",
-        timestamp: "2 min ago",
-      });
-    }
-
-    setRecentActivity(activities);
-  }, [user]);
 
   const activeApplications = 0;
   const paymentSetupComplete = false;
@@ -240,60 +181,8 @@ const TenantDashboardHome = () => {
         </div>
       </div>
 
-      <div
-        className={`p-4 rounded-lg shadow ${
-          darkMode ? "bg-gray-900 shadow-gray-700" : "bg-white shadow-gray-200"
-        }`}
-      >
-        <h3 className="text-lg font-semibold mb-4">Recent Activity</h3>
-        <div className="space-y-4">
-          {recentActivity.length > 0 ? (
-            recentActivity.map((activity, index) => (
-              <div
-                key={index}
-                className={`flex justify-between items-center border-b pb-2 ${
-                  darkMode ? "border-gray-700" : "border-gray-200"
-                }`}
-              >
-                <div className="flex items-center">
-                  {activity.type === "account_created" && (
-                    <FaUserPlus
-                      className={
-                        darkMode ? "text-gray-400 mr-2" : "text-gray-500 mr-2"
-                      }
-                      aria-hidden="true"
-                    />
-                  )}
-                  {activity.type === "profile_completion" && (
-                    <FaUserEdit
-                      className={
-                        darkMode ? "text-gray-400 mr-2" : "text-gray-500 mr-2"
-                      }
-                      aria-hidden="true"
-                    />
-                  )}
-                  <p className={darkMode ? "text-gray-400" : "text-gray-600"}>
-                    {activity.type === "account_created"
-                      ? "Account created"
-                      : "Profile completion pending"}
-                  </p>
-                </div>
-                <p
-                  className={`text-sm ${
-                    darkMode ? "text-gray-500" : "text-gray-500"
-                  }`}
-                >
-                  {activity.timestamp}
-                </p>
-              </div>
-            ))
-          ) : (
-            <p className={darkMode ? "text-gray-400" : "text-gray-600"}>
-              No recent activity.
-            </p>
-          )}
-        </div>
-      </div>
+      {/* Replace the static Recent Activity section with the RecentActivity component */}
+      <RecentActivity />
     </div>
   );
 };

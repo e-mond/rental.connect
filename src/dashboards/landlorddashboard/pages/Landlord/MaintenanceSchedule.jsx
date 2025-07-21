@@ -4,8 +4,8 @@ import { useMutation } from "@tanstack/react-query";
 import { ArrowLeft, Check } from "lucide-react";
 import Button from "../../../../components/Button";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
-import landlordApi from "../../../../api/landlordApi";
-import { useDarkMode } from "../../../../context/DarkModeContext"; 
+import landlordApi from "../../../../api/landlord/landlordApi";
+import { useDarkMode } from "../../../../context/DarkModeContext";
 
 /**
  * MaintenanceSchedule Component

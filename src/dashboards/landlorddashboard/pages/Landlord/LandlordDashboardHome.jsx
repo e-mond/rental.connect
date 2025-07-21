@@ -5,7 +5,7 @@ import { FaHome, FaFileAlt, FaCreditCard, FaStar } from "react-icons/fa";
 import AnalyticsGraph from "../../components/AnalyticsGraph";
 import { useDarkMode } from "../../../../context/DarkModeContext";
 import Button from "../../../../components/Button";
-import landlordApi from "../../../../api/landlordApi";
+import landlordApi from "../../../../api/landlord/landlordApi";
 import GlobalSkeleton from "../../../../components/GlobalSkeleton";
 
 // Rate-limit toast notifications
@@ -50,7 +50,12 @@ const LandlordDashboardHome = () => {
     setError(null);
 
     try {
-      const [dashboardResponse, leasesResponse, transactionsResponse, notificationsResponse] = await Promise.all([
+      const [
+        dashboardResponse,
+        leasesResponse,
+        transactionsResponse,
+        notificationsResponse,
+      ] = await Promise.all([
         landlordApi.fetchDashboardData(token),
         landlordApi.fetchLeases(token),
         landlordApi.fetchTransactions(token),
@@ -99,7 +104,8 @@ const LandlordDashboardHome = () => {
   const handleViewProperties = () => navigate("/dashboard/landlord/properties");
   const handleViewIssues = () => navigate("/dashboard/landlord/maintenance");
   const handleViewRatings = () => navigate("/dashboard/landlord/ratings");
-  const handleViewLeaseRenewals = () => navigate("/dashboard/landlord/lease-renewals");
+  const handleViewLeaseRenewals = () =>
+    navigate("/dashboard/landlord/lease-renewals");
   const handleViewRevenue = () => navigate("/dashboard/landlord/revenue");
 
   const convertCurrency = (amount) => {
@@ -114,10 +120,16 @@ const LandlordDashboardHome = () => {
   };
 
   const upcomingRenewals = leases.filter(
-    (lease) => lease.daysRemaining !== undefined && parseInt(lease.daysRemaining, 10) <= 30
+    (lease) =>
+      lease.daysRemaining !== undefined &&
+      parseInt(lease.daysRemaining, 10) <= 30
   );
 
-  const userName = user?.fullName || `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || user?.name || "Landlord";
+  const userName =
+    user?.fullName ||
+    `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
+    user?.name ||
+    "Landlord";
 
   if (contextLoading || loading) {
     return <GlobalSkeleton type="dashboard" />;
@@ -127,7 +139,9 @@ const LandlordDashboardHome = () => {
     return (
       <div className="p-4 text-center">
         <p className="text-red-500 mb-4">{error}</p>
-        <Button variant="primary" onClick={loadData}>Retry</Button>
+        <Button variant="primary" onClick={loadData}>
+          Retry
+        </Button>
       </div>
     );
   }

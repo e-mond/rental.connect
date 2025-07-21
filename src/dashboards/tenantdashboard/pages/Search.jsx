@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   MapPinIcon,
@@ -9,28 +9,23 @@ import {
 import { BASE_URL, DASHBOARD_BASE_URL } from "../../../config";
 import { useDarkMode } from "../../../context/DarkModeContext";
 import Button from "../../../components/Button";
+import tenantApi from "../../../api/tenant/tenantApi";
+import debounce from "lodash/debounce";
 
-// Conversion rates (approximate as of April 2025)
 const conversionRates = {
-  "GH₵": 1, // Base currency
-  USD: 0.064, // 1 GH₵ = 0.064 USD
-  EUR: 0.058, // 1 GH₵ = 0.058 EUR
+  "GH₵": 1,
+  USD: 0.065,
+  EUR: 0.059,
 };
 
-// Convert price from GH₵ to the selected currency
 const convertPrice = (priceInCedis, targetCurrency) => {
   const price = parseFloat(priceInCedis);
-  const convertedPrice = price * conversionRates[targetCurrency];
-  return convertedPrice.toLocaleString(undefined, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  });
+  return price * conversionRates[targetCurrency];
 };
 
-/**
- * Search component for tenants to find properties based on filters.
- * Allows filtering by location, price range, property type, and bedrooms.
- */
+const isAbsoluteUrl = (url) =>
+  url && (url.startsWith("http://") || url.startsWith("https://"));
+
 const Search = () => {
   const [searchQuery, setSearchQuery] = useState({
     location: "",
@@ -38,58 +33,103 @@ const Search = () => {
     propertyType: "",
     bedrooms: "",
   });
-  const [currency, setCurrency] = useState("GH₵"); // Default currency is Cedis
+  const [currency, setCurrency] = useState("GH₵");
   const [properties, setProperties] = useState([]);
   const [filteredProperties, setFilteredProperties] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [errorType, setErrorType] = useState(null);
   const navigate = useNavigate();
   const { darkMode } = useDarkMode();
 
-  useEffect(() => {
-    const fetchProperties = async () => {
+  const fetchProperties = useCallback(
+    async (signal) => {
       try {
-        const response = await fetch(`${BASE_URL}/api/properties`, {
-          headers: {},
-        }); // No token needed for public endpoint
         console.log(
-          "[Search] Fetch properties response status:",
-          response.status
+          "[Search] Fetching properties, using null token for public endpoint"
         );
-        if (!response.ok)
-          throw new Error(`Failed to fetch properties: ${response.statusText}`);
-        const data = await response.json();
+        const data = await tenantApi.fetchProperties(null, signal);
         console.log("[Search] Fetch properties data:", data);
-        const mappedProperties = data.map((prop) => {
-          // Ensure primaryImageUrl is a valid path, otherwise set to null
-          const imageUrl =
-            prop.primaryImageUrl &&
-            !prop.primaryImageUrl.includes("placeholder.com")
-              ? `${BASE_URL}${prop.primaryImageUrl}`
+
+        const mappedProperties = data
+          .map((prop) => {
+            const propertyId = prop._id || prop.id;
+            if (!propertyId) {
+              console.error("[Search] Property missing both _id and id:", prop);
+              return null;
+            }
+            console.log("[Search] Using property ID:", propertyId);
+            const imageUrl = prop.primaryImageUrl
+              ? isAbsoluteUrl(prop.primaryImageUrl)
+                ? prop.primaryImageUrl
+                : `${BASE_URL}${prop.primaryImageUrl}`
               : null;
-          return {
-            id: prop.id,
-            title: prop.title,
-            priceInCedis: prop.price,
-            price: `${currency}${convertPrice(prop.price, currency)}/month`,
-            description: `${prop.description} • ${prop.bedrooms} bed • ${prop.bathrooms} bath`,
-            image: imageUrl,
-            location: prop.location,
-            bedrooms: prop.bedrooms,
-            bathrooms: prop.bathrooms,
-          };
-        });
+            console.log(
+              "[Search] Image URL for property",
+              propertyId,
+              ":",
+              imageUrl
+            );
+            return {
+              id: propertyId,
+              title: prop.title || "Untitled Property",
+              priceInCedis: prop.price || 0,
+              price: `${currency}${convertPrice(
+                prop.price || 0,
+                currency
+              ).toLocaleString(undefined, {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 2,
+              })}/month`,
+              description: `${prop.description || "No description"} • ${
+                prop.bedrooms || 0
+              } bed • ${prop.bathrooms || 0} bath`,
+              image: imageUrl,
+              location: prop.location || "Unknown",
+              bedrooms: prop.bedrooms || 0,
+              bathrooms: prop.bathrooms || 0,
+            };
+          })
+          .filter((prop) => prop !== null);
+        console.log(
+          "[Search] Mapped properties count:",
+          mappedProperties.length
+        );
         setProperties(mappedProperties);
         setFilteredProperties(mappedProperties);
+        setError(null);
+        setErrorType(null);
       } catch (err) {
+        if (err.name === "AbortError" || err.type === "cancelled") {
+          console.log("[Search] Request cancelled, ignoring:", err.message);
+          return;
+        }
         console.error("[Search] Failed to fetch properties:", err);
+        setError(err.message || "Failed to load properties");
+        setErrorType(err.type || "unknown");
         setProperties([]);
         setFilteredProperties([]);
       } finally {
         setLoading(false);
       }
+    },
+    [currency]
+  );
+
+  const debouncedFetchProperties = useMemo(
+    () => debounce((signal) => fetchProperties(signal), 500),
+    [fetchProperties]
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    debouncedFetchProperties(controller.signal);
+    return () => {
+      controller.abort();
+      console.log("[Search] Aborting fetch request on cleanup");
+      debouncedFetchProperties.cancel();
     };
-    fetchProperties();
-  }, [currency]);
+  }, [debouncedFetchProperties]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -99,112 +139,245 @@ const Search = () => {
   const handleCurrencyChange = (e) => {
     const newCurrency = e.target.value;
     setCurrency(newCurrency);
-    // Update displayed prices for the new currency
     const updatedProperties = properties.map((prop) => ({
       ...prop,
       price: `${newCurrency}${convertPrice(
         prop.priceInCedis,
         newCurrency
-      )}/month`,
+      ).toLocaleString(undefined, {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      })}/month`,
     }));
-    setProperties(updatedProperties);
     setFilteredProperties(updatedProperties);
   };
 
-  const handleSearch = () => {
+  const handleSearch = async () => {
     const { location, priceRange, propertyType, bedrooms } = searchQuery;
-    let results = [...properties];
-    if (location) {
-      results = results.filter((prop) =>
-        prop.location.toLowerCase().includes(location.toLowerCase())
-      );
-    }
+    const queryParams = {};
+    if (location) queryParams.location = location;
     if (priceRange) {
       const [min, max] = priceRange.split("-").map(Number);
-      results = results.filter((prop) => {
-        // Convert min and max to GH₵ for comparison since priceInCedis is in GH₵
-        const minInCedis = min / conversionRates[currency];
-        const maxInCedis = max / conversionRates[currency];
-        const priceInCedis = prop.priceInCedis;
-        return priceInCedis >= minInCedis && priceInCedis <= maxInCedis;
-      });
+      queryParams.priceMin = min / conversionRates[currency];
+      queryParams.priceMax = max / conversionRates[currency];
     }
-    if (propertyType) {
-      results = results.filter((prop) =>
-        prop.title.toLowerCase().includes(propertyType.toLowerCase())
+    if (propertyType) queryParams.propertyType = propertyType;
+    if (bedrooms) queryParams.bedrooms = parseInt(bedrooms);
+
+    setLoading(true);
+    try {
+      const data = await tenantApi.fetchProperties(null, null, queryParams);
+      const mappedProperties = data
+        .map((prop) => {
+          const propertyId = prop._id || prop.id;
+          if (!propertyId) {
+            console.error("[Search] Property missing both _id and id:", prop);
+            return null;
+          }
+          const imageUrl = prop.primaryImageUrl
+            ? isAbsoluteUrl(prop.primaryImageUrl)
+              ? prop.primaryImageUrl
+              : `${BASE_URL}${prop.primaryImageUrl}`
+            : null;
+          return {
+            id: propertyId,
+            title: prop.title || "Untitled Property",
+            priceInCedis: prop.price || 0,
+            price: `${currency}${convertPrice(
+              prop.price || 0,
+              currency
+            ).toLocaleString(undefined, {
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 2,
+            })}/month`,
+            description: `${prop.description || "No description"} • ${
+              prop.bedrooms || 0
+            } bed • ${prop.bathrooms || 0} bath`,
+            image: imageUrl,
+            location: prop.location || "Unknown",
+            bedrooms: prop.bedrooms || 0,
+            bathrooms: prop.bathrooms || 0,
+          };
+        })
+        .filter((prop) => prop !== null);
+      setFilteredProperties(mappedProperties);
+      if (data.length === 0) {
+        alert("No matching properties found. Showing all properties.");
+        debouncedFetchProperties(null);
+      }
+    } catch (err) {
+      if (err.name === "AbortError" || err.type === "cancelled") {
+        console.log("[Search] Request cancelled, ignoring:", err.message);
+        return;
+      }
+      console.error("[Search] Failed to fetch properties:", err);
+      setError(err.message || "Failed to load properties");
+      setErrorType(err.type || "unknown");
+      setFilteredProperties([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRetry = async () => {
+    setLoading(true);
+    setError(null);
+    setErrorType(null);
+    try {
+      const data = await tenantApi.withRetry(
+        tenantApi.fetchProperties,
+        [null, null],
+        3,
+        2000
       );
+      const mappedProperties = data
+        .map((prop) => {
+          const propertyId = prop._id || prop.id;
+          if (!propertyId) {
+            console.error("[Search] Property missing both _id and id:", prop);
+            return null;
+          }
+          const imageUrl = prop.primaryImageUrl
+            ? isAbsoluteUrl(prop.primaryImageUrl)
+              ? prop.primaryImageUrl
+              : `${BASE_URL}${prop.primaryImageUrl}`
+            : null;
+          return {
+            id: propertyId,
+            title: prop.title || "Untitled Property",
+            priceInCedis: prop.price || 0,
+            price: `${currency}${convertPrice(
+              prop.price || 0,
+              currency
+            ).toLocaleString(undefined, {
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 2,
+            })}/month`,
+            description: `${prop.description || "No description"} • ${
+              prop.bedrooms || 0
+            } bed • ${prop.bathrooms || 0} bath`,
+            image: imageUrl,
+            location: prop.location || "Unknown",
+            bedrooms: prop.bedrooms || 0,
+            bathrooms: prop.bathrooms || 0,
+          };
+        })
+        .filter((prop) => prop !== null);
+      setProperties(mappedProperties);
+      setFilteredProperties(mappedProperties);
+    } catch (err) {
+      console.error("[Search] Retry failed:", err);
+      setError(err.message || "Failed to load properties");
+      setErrorType(err.type || "unknown");
+      setProperties([]);
+      setFilteredProperties([]);
+      if (err.type === "auth" && err.status === 401) {
+        console.log("[Search] Auth error on retry, redirecting to login");
+        localStorage.removeItem("token");
+        localStorage.removeItem("refreshToken");
+        navigate("/tenantlogin");
+      }
+    } finally {
+      setLoading(false);
     }
-    if (bedrooms) {
-      results = results.filter((prop) => prop.bedrooms === parseInt(bedrooms));
+  };
+
+  const handleViewDetails = (propertyId) => {
+    if (!propertyId || typeof propertyId !== "string") {
+      console.error("[Search] Invalid property ID:", propertyId);
+      alert("Unable to view property details. Invalid property ID.");
+      return;
     }
-    if (results.length === 0) {
-      alert("No exact matches found. Showing all properties.");
-      setFilteredProperties(properties);
-    } else {
-      setFilteredProperties(results);
-    }
+    console.log("[Search] Navigating to property details with ID:", propertyId);
+    navigate(`${DASHBOARD_BASE_URL}/tenant/property/${propertyId}`);
   };
 
   if (loading) {
     return (
       <div
-        className={`p-4 md:p-6 space-y-6 z-0 ${
-          darkMode ? "text-gray-200" : "text-gray-800"
+        className={`p-6 space-y-6 ${
+          darkMode ? "text-gray-200 bg-gray-900" : "text-gray-800 bg-gray-50"
         }`}
       >
-        <p>Loading...</p>
+        <p>Loading properties...</p>
+      </div>
+    );
+  }
+
+  if (error && errorType !== "cancelled") {
+    return (
+      <div
+        className={`p-6 space-y-6 ${
+          darkMode ? "text-gray-200 bg-gray-900" : "text-gray-800 bg-gray-50"
+        }`}
+      >
+        <p className="text-red-500">{error}</p>
+        {(errorType === "network" || errorType === "server") && (
+          <Button variant="primary" onClick={handleRetry} className="mt-2">
+            Retry
+          </Button>
+        )}
+        {errorType === "auth" && (
+          <Button
+            variant="primary"
+            onClick={() => navigate("/tenantlogin")}
+            className="mt-2"
+          >
+            Log In
+          </Button>
+        )}
       </div>
     );
   }
 
   return (
     <div
-      className={`p-4 md:p-6 space-y-6 z-0 ${
-        darkMode ? "text-gray-200" : "text-gray-800"
+      className={`p-6 space-y-8 ${
+        darkMode ? "text-gray-200 bg-gray-900" : "text-gray-800 bg-gray-50"
       }`}
     >
-      <h1 className="text-lg md:text-2xl font-bold">Find Your Perfect Home</h1>
+      <h1 className="text-2xl font-bold">Explore Landlord Listings</h1>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <div
-          className={`relative flex items-center border p-3 rounded-lg ${
+          className={`flex items-center p-3 rounded-lg shadow-md ${
             darkMode
-              ? "border-gray-600 bg-gray-800"
-              : "border-gray-300 bg-white"
+              ? "bg-gray-800 border-gray-700"
+              : "bg-white border-gray-200"
           }`}
         >
           <MapPinIcon
-            className={`w-5 h-5 mr-2 ${
-              darkMode ? "text-gray-400" : "text-gray-400"
+            className={`w-6 h-6 mr-3 ${
+              darkMode ? "text-gray-400" : "text-gray-600"
             }`}
           />
           <input
             type="text"
             name="location"
             placeholder="Enter city or zip code"
-            className={`w-full focus:outline-none text-sm md:text-base ${
+            className={`w-full focus:outline-none text-base ${
               darkMode
-                ? "bg-gray-800 text-gray-200 placeholder-gray-400"
-                : "bg-white text-gray-800 placeholder-gray-500"
+                ? "bg-gray-800 text-gray-200 placeholder-gray-500"
+                : "bg-white text-gray-800 placeholder-gray-400"
             }`}
             value={searchQuery.location}
             onChange={handleInputChange}
           />
         </div>
         <div
-          className={`relative flex items-center border p-3 rounded-lg ${
+          className={`flex items-center p-3 rounded-lg shadow-md ${
             darkMode
-              ? "border-gray-600 bg-gray-800"
-              : "border-gray-300 bg-white"
+              ? "bg-gray-800 border-gray-700"
+              : "bg-white border-gray-200"
           }`}
         >
           <BanknotesIcon
-            className={`w-5 h-5 mr-2 ${
-              darkMode ? "text-gray-400" : "text-gray-400"
+            className={`w-6 h-6 mr-3 ${
+              darkMode ? "text-gray-400" : "text-gray-600"
             }`}
           />
           <select
             name="priceRange"
-            className={`w-full focus:outline-none text-sm md:text-base ${
+            className={`w-full focus:outline-none text-base ${
               darkMode
                 ? "bg-gray-800 text-gray-200"
                 : "bg-transparent text-gray-800"
@@ -212,103 +385,79 @@ const Search = () => {
             value={searchQuery.priceRange}
             onChange={handleInputChange}
           >
-            <option value="" className={darkMode ? "bg-gray-800" : "bg-white"}>
-              Select Price Range
-            </option>
+            <option value="">Select Price Range</option>
             <option
               value={
                 currency === "GH₵"
                   ? "0-1000"
                   : currency === "USD"
-                  ? "0-64"
-                  : "0-58"
+                  ? "0-65"
+                  : "0-59"
               }
-              className={darkMode ? "bg-gray-800" : "bg-white"}
             >
               {currency}0 - {currency}
-              {currency === "GH₵" ? "1,000" : currency === "USD" ? "64" : "58"}
+              {currency === "GH₵" ? "1,000" : currency === "USD" ? "65" : "59"}
             </option>
             <option
               value={
                 currency === "GH₵"
                   ? "1000-2000"
                   : currency === "USD"
-                  ? "64-128"
-                  : "58-116"
+                  ? "65-130"
+                  : "59-118"
               }
-              className={darkMode ? "bg-gray-800" : "bg-white"}
             >
-              {currency}
-              {currency === "GH₵"
-                ? "1,000"
-                : currency === "USD"
-                ? "64"
-                : "58"}{" "}
-              - {currency}
+              {currency}1,000 - {currency}
               {currency === "GH₵"
                 ? "2,000"
                 : currency === "USD"
-                ? "128"
-                : "116"}
+                ? "130"
+                : "118"}
             </option>
             <option
               value={
                 currency === "GH₵"
                   ? "2000-3000"
                   : currency === "USD"
-                  ? "128-192"
-                  : "116-174"
+                  ? "130-195"
+                  : "118-177"
               }
-              className={darkMode ? "bg-gray-800" : "bg-white"}
             >
-              {currency}
-              {currency === "GH₵"
-                ? "2,000"
-                : currency === "USD"
-                ? "128"
-                : "116"}{" "}
-              - {currency}
+              {currency}2,000 - {currency}
               {currency === "GH₵"
                 ? "3,000"
                 : currency === "USD"
-                ? "192"
-                : "174"}
+                ? "195"
+                : "177"}
             </option>
             <option
               value={
                 currency === "GH₵"
                   ? "3000-5000"
                   : currency === "USD"
-                  ? "192-320"
-                  : "174-290"
+                  ? "195-325"
+                  : "177-295"
               }
-              className={darkMode ? "bg-gray-800" : "bg-white"}
             >
-              {currency}
-              {currency === "GH₵"
-                ? "3,000"
-                : currency === "USD"
-                ? "192"
-                : "174"}{" "}
-              - {currency}
+              {currency}3,000 - {currency}
               {currency === "GH₵"
                 ? "5,000"
                 : currency === "USD"
-                ? "320"
-                : "290"}
+                ? "325"
+                : "295"}
             </option>
           </select>
         </div>
         <div
-          className={`relative flex items-center border p-3 rounded-lg ${
+          className={`flex items-center p-3 rounded-lg shadow-md ${
             darkMode
-              ? "border-gray-600 bg-gray-800"
-              : "border-gray-300 bg-white"
+              ? "bg-gray-800 border-gray-700"
+              : "bg-white border-gray-200"
           }`}
         >
           <select
             name="currency"
-            className={`w-full focus:outline-none text-sm md:text-base ${
+            className={`w-full focus:outline-none text-base ${
               darkMode
                 ? "bg-gray-800 text-gray-200"
                 : "bg-transparent text-gray-800"
@@ -316,46 +465,31 @@ const Search = () => {
             value={currency}
             onChange={handleCurrencyChange}
           >
-            <option
-              value="GH₵"
-              className={darkMode ? "bg-gray-800" : "bg-white"}
-            >
-              GH₵ (Cedis)
-            </option>
-            <option
-              value="USD"
-              className={darkMode ? "bg-gray-800" : "bg-white"}
-            >
-              USD (Dollar)
-            </option>
-            <option
-              value="EUR"
-              className={darkMode ? "bg-gray-800" : "bg-white"}
-            >
-              EUR (Euro)
-            </option>
+            <option value="GH₵">GH₵ (Cedis)</option>
+            <option value="USD">USD (Dollar)</option>
+            <option value="EUR">EUR (Euro)</option>
           </select>
         </div>
         <div
-          className={`relative flex items-center border p-3 rounded-lg ${
+          className={`flex items-center p-3 rounded-lg shadow-md ${
             darkMode
-              ? "border-gray-600 bg-gray-800"
-              : "border-gray-300 bg-white"
+              ? "bg-gray-800 border-gray-700"
+              : "bg-white border-gray-200"
           }`}
         >
           <HomeIcon
-            className={`w-5 h-5 mr-2 ${
-              darkMode ? "text-gray-400" : "text-gray-400"
+            className={`w-6 h-6 mr-3 ${
+              darkMode ? "text-gray-400" : "text-gray-600"
             }`}
           />
           <input
             type="text"
             name="propertyType"
             placeholder="Property Type"
-            className={`w-full focus:outline-none text-sm md:text-base ${
+            className={`w-full focus:outline-none text-base ${
               darkMode
-                ? "bg-gray-800 text-gray-200 placeholder-gray-400"
-                : "bg-white text-gray-800 placeholder-gray-500"
+                ? "bg-gray-800 text-gray-200 placeholder-gray-500"
+                : "bg-white text-gray-800 placeholder-gray-400"
             }`}
             value={searchQuery.propertyType}
             onChange={handleInputChange}
@@ -368,25 +502,25 @@ const Search = () => {
           </datalist>
         </div>
         <div
-          className={`relative flex items-center border p-3 rounded-lg ${
+          className={`flex items-center p-3 rounded-lg shadow-md ${
             darkMode
-              ? "border-gray-600 bg-gray-800"
-              : "border-gray-300 bg-white"
+              ? "bg-gray-800 border-gray-700"
+              : "bg-white border-gray-200"
           }`}
         >
           <HomeModernIcon
-            className={`w-5 h-5 mr-2 ${
-              darkMode ? "text-gray-400" : "text-gray-400"
+            className={`w-6 h-6 mr-3 ${
+              darkMode ? "text-gray-400" : "text-gray-600"
             }`}
           />
           <input
             type="number"
             name="bedrooms"
             placeholder="Number of bedrooms"
-            className={`w-full focus:outline-none text-sm md:text-base ${
+            className={`w-full focus:outline-none text-base ${
               darkMode
-                ? "bg-gray-800 text-gray-200 placeholder-gray-400"
-                : "bg-white text-gray-800 placeholder-gray-500"
+                ? "bg-gray-800 text-gray-200 placeholder-gray-500"
+                : "bg-white text-gray-800 placeholder-gray-400"
             }`}
             value={searchQuery.bedrooms}
             onChange={handleInputChange}
@@ -397,60 +531,69 @@ const Search = () => {
       <Button
         variant="primary"
         onClick={handleSearch}
-        className="w-full md:w-auto text-sm md:text-base"
+        className="w-full md:w-auto px-6 py-3 text-base font-semibold"
       >
         Search Properties
       </Button>
       <div>
-        <h2 className="text-base md:text-xl font-semibold mt-6">
-          Featured Properties
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+        <h2 className="text-xl font-semibold mt-8">Landlord Listings</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mt-6">
           {filteredProperties.length > 0 ? (
             filteredProperties.map((property) => (
               <div
                 key={property.id}
-                className={`border p-4 rounded-lg shadow-sm z-0 ${
+                className={`rounded-lg overflow-hidden shadow-lg transition-transform duration-200 hover:scale-105 ${
                   darkMode
-                    ? "border-gray-600 bg-gray-900 shadow-gray-700"
-                    : "border-gray-200 bg-gray-50 shadow-gray-200"
+                    ? "bg-gray-800 border-gray-700"
+                    : "bg-white border-gray-100"
                 }`}
               >
                 {property.image ? (
                   <img
                     src={property.image}
                     alt={property.title}
-                    className="w-full h-40 object-cover rounded-lg"
+                    className="w-full h-48 object-cover"
+                    onError={(e) => {
+                      console.error(
+                        "[Search] Image load failed for",
+                        property.image,
+                        e
+                      );
+                      e.target.src = "/placeholder-image.jpg"; // Local fallback
+                    }}
+                    loading="lazy"
                   />
                 ) : (
-                  <div className="w-full h-40 bg-gray-200 rounded-lg flex items-center justify-center">
-                    <span className="text-gray-500">No image</span>
+                  <div className="w-full h-48 bg-gray-200 flex items-center justify-center">
+                    <span
+                      className={darkMode ? "text-gray-500" : "text-gray-400"}
+                    >
+                      No image
+                    </span>
                   </div>
                 )}
-                <h3 className="font-bold mt-2 text-sm md:text-base">
-                  {property.title}
-                </h3>
-                <p
-                  className={`text-xs md:text-sm ${
-                    darkMode ? "text-gray-400" : "text-gray-600"
-                  }`}
-                >
-                  {property.price} - {property.description}
-                </p>
-                <Button
-                  variant="primary"
-                  onClick={() =>
-                    navigate(`${DASHBOARD_BASE_URL}/property/${property.id}`)
-                  }
-                  className="mt-3 w-full md:w-auto text-sm md:text-base"
-                >
-                  View Details
-                </Button>
+                <div className="p-4">
+                  <h3 className="font-bold text-lg mb-2">{property.title}</h3>
+                  <p
+                    className={`text-sm ${
+                      darkMode ? "text-gray-400" : "text-gray-600"
+                    }`}
+                  >
+                    {property.price} - {property.description}
+                  </p>
+                  <Button
+                    variant="primary"
+                    onClick={() => handleViewDetails(property.id)}
+                    className="mt-4 w-full text-sm py-2"
+                  >
+                    View Details
+                  </Button>
+                </div>
               </div>
             ))
           ) : (
             <p
-              className={`text-sm md:text-base ${
+              className={`text-base ${
                 darkMode ? "text-gray-400" : "text-gray-500"
               }`}
             >

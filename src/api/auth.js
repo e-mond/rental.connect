@@ -1,15 +1,7 @@
 import axios from "axios";
 import { BASE_URL } from "../config";
 
-/**
- * API client for authentication-related endpoints.
- */
 const authApi = {
-  /**
-   * Signs up a new user.
-   * @param {Object} userData - The signup payload containing user details.
-   * @returns {Promise<Object>} - The response data from the server.
-   */
   signup: async (userData) => {
     try {
       const response = await axios.post(
@@ -22,22 +14,17 @@ const authApi = {
     } catch (error) {
       console.error("Signup error:", {
         status: error.response?.status,
-        data: error.response?.data,
+        data: JSON.stringify(error.response?.data, null, 2),
         message: error.message,
       });
       throw error;
     }
   },
 
-  /**
-   * Logs in a user.
-   * @param {Object} credentials - The login payload containing email and password.
-   * @returns {Promise<Object>} - The response data from the server.
-   */
   login: async (credentials) => {
     try {
       const response = await axios.post(
-        `${BASE_URL}/api/auth/login`,
+        `${BASE_URL}/api/auth/signin`,
         credentials
       );
       console.log("Login response:", response.data);
@@ -45,7 +32,7 @@ const authApi = {
     } catch (error) {
       console.error("Login error:", {
         status: error.response?.status,
-        data: error.response?.data,
+        data: JSON.stringify(error.response?.data, null, 2),
         message: error.message,
       });
       throw error;

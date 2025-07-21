@@ -1,38 +1,46 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { BASE_URL } from "../../../config";
 import GlobalSkeleton from "../../../components/GlobalSkeleton";
-import { FaHome } from "react-icons/fa";
-import { useDarkMode } from "../../../context/DarkModeContext"; // Import useDarkMode
-import Button from "../../../components/Button"; // Import Button component
+import { FaHome, FaEye } from "react-icons/fa";
+import { useDarkMode } from "../../../context/DarkModeContext";
+import Button from "../../../components/Button";
+import tenantApi from "../../../api/tenant/tenantApi";
 
-const TenantApplications = () => {
-  const [applications, setApplications] = useState([]);
-  const [properties, setProperties] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+/**
+ * Applications Component
+ *
+ * Displays a list of rental applications submitted by the tenant, including
+ * property details, status, and actions to view properties. Handles token
+ * validation, API requests, error states, and provides a user-friendly experience.
+ */
+const Applications = () => {
+  const [applications, setApplications] = useState([]); // Store tenant applications
+  const [properties, setProperties] = useState({}); // Map of property details by ID
+  const [loading, setLoading] = useState(true); // Loading state for initial fetch
+  const [propertyLoading, setPropertyLoading] = useState(false); // Loading state for property fetches
+  const [error, setError] = useState(null); // Error message to display
+  const [errorType, setErrorType] = useState(null); // Type of error (auth, network, server, unknown)
   const navigate = useNavigate();
-  const { darkMode } = useDarkMode(); // Access dark mode state
+  const { darkMode } = useDarkMode();
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    toast.info("Logged out due to invalid session. Please log in again.", {
-      position: "top-right",
-      autoClose: 2000,
-      hideProgressBar: false,
-      closeOnClick: true,
-      pauseOnHover: true,
-      draggable: true,
-    });
-    setTimeout(() => {
-      navigate("/tenantlogin");
-    }, 2000);
-  };
-
+  /**
+   * Decodes a JWT token to extract its payload.
+   * @param {string} token - The JWT token to decode.
+   * @returns {Object|null} - The decoded payload or null if decoding fails.
+   */
   const decodeToken = (token) => {
     try {
+      if (!token || typeof token !== "string" || !token.includes(".")) {
+        console.error("Invalid token format:", token);
+        return null;
+      }
       const base64Url = token.split(".")[1];
+      if (!base64Url) {
+        console.error("Token payload is missing");
+        return null;
+      }
       const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
       const jsonPayload = decodeURIComponent(
         atob(base64)
@@ -40,68 +48,36 @@ const TenantApplications = () => {
           .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
           .join("")
       );
-      return JSON.parse(jsonPayload);
+      const payload = JSON.parse(jsonPayload);
+      console.log("Decoded token payload:", payload);
+      return payload;
     } catch (err) {
       console.error("Error decoding token:", err.message);
       return null;
     }
   };
 
-  useEffect(() => {
-    const fetchApplications = async () => {
+  /**
+   * Fetches tenant applications and related property details using tenantApi.
+   * Handles token validation, API errors, and sets appropriate states.
+   */
+  const fetchApplications = useCallback(
+    async (controller) => {
       try {
         setLoading(true);
+        setError(null);
+        setErrorType(null);
+
+        // Retrieve token from localStorage
         const token = localStorage.getItem("token");
-
-        // Debugging: Log the token value and decode it
         console.log("Token retrieved from localStorage:", token);
-        if (token) {
-          const decodedToken = decodeToken(token);
-          console.log("Decoded token payload:", decodedToken);
-          if (decodedToken) {
-            const expirationDate = new Date(decodedToken.exp * 1000);
-            console.log("Token expiration:", expirationDate.toISOString());
-            if (expirationDate < new Date()) {
-              console.log("Token is expired!");
-              toast.error(
-                "Your session has expired due to token expiration. Please log in again.",
-                {
-                  position: "top-right",
-                  autoClose: 2000,
-                  hideProgressBar: false,
-                  closeOnClick: true,
-                  pauseOnHover: true,
-                  draggable: true,
-                }
-              );
-              localStorage.removeItem("token");
-              setTimeout(() => {
-                navigate("/tenantlogin");
-              }, 2000);
-              return;
-            }
-          }
-          toast.info("Token found in localStorage.", {
-            position: "top-right",
-            autoClose: 2000,
-            hideProgressBar: false,
-            closeOnClick: true,
-            pauseOnHover: true,
-            draggable: true,
-          });
-        } else {
-          toast.error("No token found in localStorage.", {
-            position: "top-right",
-            autoClose: 2000,
-            hideProgressBar: false,
-            closeOnClick: true,
-            pauseOnHover: true,
-            draggable: true,
-          });
-        }
 
+        // Validate token presence
         if (!token) {
-          setError("No authentication token found. Redirecting to login...");
+          setError(
+            "You are not logged in. Please log in to view your applications."
+          );
+          setErrorType("auth");
           toast.error("Please log in to view your applications.", {
             position: "top-right",
             autoClose: 2000,
@@ -116,83 +92,117 @@ const TenantApplications = () => {
           return;
         }
 
-        // Fetch applications
-        const response = await fetch(`${BASE_URL}/api/applications/tenant`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error("API Response Status:", response.status);
-          console.error("API Response Text:", errorText);
-          if (response.status === 401) {
-            localStorage.removeItem("token");
-            throw new Error(
-              "Session expired: Full authentication is required. Please log in again."
-            );
-          }
-          throw new Error(
-            `Failed to fetch applications: HTTP ${response.status} - ${
-              errorText || "Unknown error"
-            }`
+        // Decode token for logging purposes
+        const decodedToken = decodeToken(token);
+        if (decodedToken) {
+          const expirationDate = new Date(decodedToken.exp * 1000);
+          console.log("Token expiration:", expirationDate.toISOString());
+          console.log("Current time:", new Date().toISOString());
+        } else {
+          console.warn(
+            "Token could not be decoded, proceeding with API call to validate"
           );
         }
 
-        const data = await response.json();
+        toast.info("Fetching your applications...", {
+          position: "top-right",
+          autoClose: 2000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
+
+        // Fetch tenant applications using tenantApi
+        const data = await tenantApi.fetchApplications(
+          token,
+          controller.signal
+        );
         console.log("Fetched applications:", data);
         setApplications(data);
 
         // Fetch property details for each application
-        const propertyIds = [...new Set(data.map((app) => app.propertyId))];
-        const propertyPromises = propertyIds.map((id) =>
-          fetch(`${BASE_URL}/api/properties/${id}`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          }).then((res) => {
-            if (!res.ok) {
-              throw new Error(`Failed to fetch property ${id}`);
-            }
-            return res.json();
-          })
-        );
-        const propertyData = await Promise.all(propertyPromises);
-        const propertyMap = propertyData.reduce((acc, property) => {
-          acc[property.id] = property;
-          return acc;
-        }, {});
-        setProperties(propertyMap);
-      } catch (err) {
-        console.error("Error fetching applications:", err.message);
-        setError(err.message);
-        if (err.message.includes("token") || err.message.includes("401")) {
-          toast.error(
-            "Session expired: Full authentication is required. Please log in again.",
-            {
-              position: "top-right",
-              autoClose: 2000,
-              hideProgressBar: false,
-              closeOnClick: true,
-              pauseOnHover: true,
-              draggable: true,
-            }
+        if (data.length > 0) {
+          setPropertyLoading(true);
+          const propertyIds = [...new Set(data.map((app) => app.propertyId))];
+          const propertyPromises = propertyIds.map((id) =>
+            tenantApi.fetchProperty(token, id, controller.signal)
           );
+          const propertyData = await Promise.all(propertyPromises);
+          const propertyMap = propertyData.reduce((acc, property) => {
+            acc[property.id] = property;
+            return acc;
+          }, {});
+          setProperties(propertyMap);
+          setPropertyLoading(false);
+        }
+      } catch (err) {
+        if (err.type === "cancelled") {
+          console.log("Request was cancelled:", err.message);
+          return;
+        }
+        console.error("Error fetching applications:", err.message);
+        console.log("Error details:", {
+          type: err.type,
+          status: err.status,
+          details: err.details,
+        });
+
+        setError(
+          err.type === "auth"
+            ? "Your session appears to be invalid. Please log in again to continue."
+            : err.type === "network"
+            ? "We’re having trouble connecting. Please check your network and try again."
+            : err.type === "server"
+            ? "The server is currently unavailable. Please try again later."
+            : "An error occurred while fetching your applications. Please try again."
+        );
+        setErrorType(err.type || "unknown");
+        toast.error(err.message, {
+          position: "top-right",
+          autoClose: 2000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
+
+        if (err.type === "auth") {
+          localStorage.removeItem("token"); // Clear token on auth error
           setTimeout(() => {
             navigate("/tenantlogin");
           }, 2000);
+        } else {
+          // For non-auth errors, keep the UI visible and allow retry
+          setApplications([]); // Ensure UI shows "no applications" state
+          setProperties({});
+          setLoading(false);
         }
       } finally {
-        setLoading(false);
+        if (!error || errorType !== "auth") {
+          setLoading(false);
+        }
       }
+    },
+    [navigate, error, errorType]
+  );
+
+  // Fetch applications on component mount with request cancellation
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchApplications(controller);
+    return () => {
+      controller.abort(); // Cancel requests on component unmount
     };
+  }, [fetchApplications]);
 
-    fetchApplications();
-  }, [navigate]);
+  // Handle retry for network or server errors
+  const handleRetry = () => {
+    const controller = new AbortController();
+    fetchApplications(controller);
+  };
 
+  // Loading state for initial fetch
   if (loading) {
     return (
       <div className="max-w-2xl mx-auto p-4 sm:p-6 lg:max-w-6xl lg:p-8">
@@ -204,11 +214,6 @@ const TenantApplications = () => {
           Your Applications
         </h1>
         <div
-          className={`animate-pulse h-8 w-1/2 rounded mb-6 ${
-            darkMode ? "bg-gray-700" : "bg-gray-300"
-          }`}
-        />
-        <div
           className={`rounded-lg shadow ${
             darkMode
               ? "bg-gray-900 shadow-gray-700"
@@ -216,47 +221,19 @@ const TenantApplications = () => {
           }`}
         >
           <GlobalSkeleton
-            type="table"
+            type="grid"
             bgColor={darkMode ? "bg-gray-700" : "bg-gray-300"}
             animationSpeed="1.2s"
+            items={3}
           />
         </div>
       </div>
     );
   }
 
-  if (error) {
-    return (
-      <div className="max-w-2xl mx-auto p-4 sm:p-6 lg:max-w-6xl lg:p-8 text-center">
-        <p
-          className={`mb-4 text-base lg:text-lg ${
-            darkMode ? "text-red-400" : "text-red-500"
-          }`}
-        >
-          {error}
-        </p>
-        <div className="flex justify-center gap-4">
-          <Button
-            variant="secondary"
-            onClick={() => navigate("/dashboard/tenant/dashboard")}
-            className="text-base lg:text-lg"
-          >
-            Back to Dashboard
-          </Button>
-          <Button
-            variant="danger"
-            onClick={handleLogout}
-            className="text-base lg:text-lg"
-          >
-            Log Out
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
+  // Render the UI even if there’s an error (except for auth errors, which redirect)
   return (
-    <div className="max-w-2xl mx-auto p-4 sm:p-6 lg:max-w-6xl lg:p-8">
+    <div className="max-w-full mx-auto p-4 sm:p-6 lg:max-w-7xl lg:p-8">
       <h1
         className={`text-2xl font-bold mb-6 text-center lg:text-4xl lg:text-left lg:mb-8 ${
           darkMode ? "text-gray-200" : "text-gray-900"
@@ -265,133 +242,160 @@ const TenantApplications = () => {
         Your Applications
       </h1>
 
-      {applications.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table
-            className={`min-w-full rounded-lg shadow-md ${
-              darkMode
-                ? "bg-gray-900 shadow-gray-700"
-                : "bg-white shadow-gray-200"
+      {error && errorType !== "auth" && (
+        <div className="mb-6 text-center">
+          <p
+            className={`text-base lg:text-lg ${
+              darkMode ? "text-red-400" : "text-red-500"
             }`}
           >
-            <thead>
-              <tr
-                className={`text-sm lg:text-base ${
-                  darkMode
-                    ? "bg-gray-800 text-gray-300"
-                    : "bg-gray-100 text-gray-600"
-                }`}
-              >
-                <th className="p-3 text-left">Property</th>
-                <th className="p-3 text-left">Status</th>
-                <th className="p-3 text-left">Submitted At</th>
-                <th className="p-3 text-left">Move-In Date</th>
-                <th className="p-3 text-left">Occupants</th>
-                <th className="p-3 text-left">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {applications.map((application) => (
-                <tr
-                  key={application.id}
-                  className={`border-b text-sm lg:text-base ${
-                    darkMode
-                      ? "border-gray-700 hover:bg-gray-800"
-                      : "border-gray-200 hover:bg-gray-50"
-                  }`}
-                >
-                  <td
-                    className={`p-3 flex items-center ${
+            {error}
+          </p>
+          {(errorType === "network" || errorType === "server") && (
+            <Button
+              variant="primary"
+              onClick={handleRetry}
+              className="mt-2 text-base lg:text-lg px-4 py-2"
+            >
+              Retry
+            </Button>
+          )}
+        </div>
+      )}
+
+      {applications.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {applications.map((application) => (
+            <div
+              key={application.id}
+              className={`rounded-xl shadow-md p-4 transition-all duration-200 ${
+                darkMode
+                  ? "bg-gray-900 shadow-gray-700 hover:bg-gray-800"
+                  : "bg-white shadow-gray-200 hover:bg-gray-50"
+              }`}
+            >
+              <div className="flex items-center mb-4">
+                {propertyLoading ? (
+                  <div
+                    className={`animate-pulse w-16 h-16 rounded-lg mr-4 ${
+                      darkMode ? "bg-gray-700" : "bg-gray-300"
+                    }`}
+                  />
+                ) : properties[application.propertyId]?.primaryImageUrl ? (
+                  <img
+                    src={`${BASE_URL}${
+                      properties[application.propertyId].primaryImageUrl
+                    }`}
+                    alt={
+                      properties[application.propertyId]?.title || "Property"
+                    }
+                    className="w-16 h-16 rounded-lg mr-4 object-cover"
+                  />
+                ) : (
+                  <div
+                    className={`w-16 h-16 rounded-lg mr-4 flex items-center justify-center ${
+                      darkMode ? "bg-gray-700" : "bg-gray-300"
+                    }`}
+                  >
+                    <FaHome
+                      className={`text-2xl ${
+                        darkMode ? "text-gray-400" : "text-gray-500"
+                      }`}
+                    />
+                  </div>
+                )}
+                <div>
+                  <h3
+                    className={`text-lg font-semibold ${
                       darkMode ? "text-gray-200" : "text-gray-800"
                     }`}
                   >
-                    <img
-                      src={
-                        properties[application.propertyId]?.imageUrl
-                          ? `${BASE_URL}${
-                              properties[application.propertyId].imageUrl
-                            }`
-                          : "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=40&h=40&fit=crop"
-                      }
-                      alt={
-                        properties[application.propertyId]?.title || "Property"
-                      }
-                      className="w-10 h-10 rounded-full mr-3"
-                      onError={(e) =>
-                        (e.target.src =
-                          "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=40&h=40&fit=crop")
-                      }
-                    />
-                    <span>
-                      {properties[application.propertyId]?.title ||
+                    {propertyLoading
+                      ? "Loading..."
+                      : properties[application.propertyId]?.title ||
                         "Unknown Property"}
-                    </span>
-                  </td>
-                  <td className="p-3">
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs lg:text-sm ${
-                        application.status === "Submitted"
-                          ? darkMode
-                            ? "bg-yellow-900 text-yellow-300"
-                            : "bg-yellow-100 text-yellow-800"
-                          : application.status === "Under Review"
-                          ? darkMode
-                            ? "bg-blue-900 text-blue-300"
-                            : "bg-blue-100 text-blue-800"
-                          : application.status === "Approved"
-                          ? darkMode
-                            ? "bg-green-900 text-green-300"
-                            : "bg-green-100 text-green-800"
-                          : darkMode
-                          ? "bg-red-900 text-red-300"
-                          : "bg-red-100 text-red-800"
-                      }`}
-                    >
-                      {application.status}
-                    </span>
-                  </td>
-                  <td
-                    className={`p-3 ${
-                      darkMode ? "text-gray-200" : "text-gray-800"
+                  </h3>
+                  <p
+                    className={`text-sm ${
+                      darkMode ? "text-gray-400" : "text-gray-500"
                     }`}
                   >
                     {new Date(application.submittedAt).toLocaleDateString()}
-                  </td>
-                  <td
-                    className={`p-3 ${
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div>
+                  <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    Status
+                  </span>
+                  <span
+                    className={`ml-2 px-2 py-1 rounded-full text-sm ${
+                      application.status === "Submitted"
+                        ? darkMode
+                          ? "bg-yellow-900 text-yellow-300"
+                          : "bg-yellow-100 text-yellow-800"
+                        : application.status === "Under Review"
+                        ? darkMode
+                          ? "bg-blue-900 text-blue-300"
+                          : "bg-blue-100 text-blue-800"
+                        : application.status === "Approved"
+                        ? darkMode
+                          ? "bg-green-900 text-green-300"
+                          : "bg-green-100 text-green-800"
+                        : darkMode
+                        ? "bg-red-900 text-red-300"
+                        : "bg-red-100 text-red-800"
+                    }`}
+                  >
+                    {application.status}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    Move-In Date
+                  </span>
+                  <span
+                    className={`ml-2 text-sm ${
                       darkMode ? "text-gray-200" : "text-gray-800"
                     }`}
                   >
-                    {application.moveInDate}
-                  </td>
-                  <td
-                    className={`p-3 ${
+                    {application.moveInDate || "Not specified"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    Occupants
+                  </span>
+                  <span
+                    className={`ml-2 text-sm ${
                       darkMode ? "text-gray-200" : "text-gray-800"
                     }`}
                   >
-                    {application.occupants}
-                  </td>
-                  <td className="p-3">
-                    <Button
-                      variant="secondary"
-                      onClick={() =>
-                        navigate(
-                          `/dashboard/tenant/property/${application.propertyId}`
-                        )
-                      }
-                      className="text-sm lg:text-base"
-                    >
-                      View Property
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    {application.occupants || "Not specified"}
+                  </span>
+                </div>
+              </div>
+              <div className="mt-4">
+                <Button
+                  variant="secondary"
+                  onClick={() =>
+                    navigate(
+                      `/dashboard/tenant/property/${application.propertyId}`
+                    )
+                  }
+                  className="w-full text-sm flex items-center justify-center transition-all duration-200 hover:bg-gray-600 dark:hover:bg-gray-700"
+                >
+                  <FaEye className="mr-2" />
+                  View Property
+                </Button>
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
         <div
-          className={`text-center rounded-lg shadow p-6 ${
+          className={`rounded-xl shadow-md p-6 text-center ${
             darkMode
               ? "bg-gray-900 shadow-gray-700"
               : "bg-white shadow-gray-200"
@@ -415,7 +419,7 @@ const TenantApplications = () => {
           <Button
             variant="primary"
             onClick={() => navigate("/dashboard/tenant/search")}
-            className="text-base lg:text-lg"
+            className="text-base lg:text-lg px-6 py-3 hover:shadow-md transition-all duration-200"
           >
             Search for Properties
           </Button>
@@ -425,4 +429,4 @@ const TenantApplications = () => {
   );
 };
 
-export default TenantApplications;
+export default Applications;

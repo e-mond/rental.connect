@@ -18,7 +18,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useDarkMode } from "../../../../context/DarkModeContext";
 import Button from "../../../../components/Button";
-import landlordApi from "../../../../api/landlordApi";
+import landlordApi from "../../../../api/landlord/landlordApi";
 import { toast } from "react-toastify";
 import {
   FaHome,
@@ -136,15 +136,35 @@ const LandlordDashboard = () => {
     refetch: refetchProperties,
   } = useQuery({
     queryKey: ["properties", user?._id],
-    queryFn: () => landlordApi.fetchProperties(token),
+    queryFn: async () => {
+      console.log(
+        "[LandlordDashboard] Fetching properties for user:",
+        user?._id
+      );
+      const data = await landlordApi.fetchProperties(token);
+      if (!Array.isArray(data)) {
+        console.error(
+          "[LandlordDashboard] Properties response is not an array:",
+          data
+        );
+        return [];
+      }
+      return data.map((prop) => ({
+        ...prop,
+        id: prop.id || prop._id || `temp-id-${Math.random()}`,
+        status: prop.status || "Active",
+      }));
+    },
     enabled: !!user && !!user._id && !!token,
     onSuccess: (data) => {
-      console.log("[LandlordDashboard] Properties updated:", data);
+      console.log("[LandlordDashboard] Properties fetched successfully:", data);
     },
     onError: (err) => {
       console.error("[LandlordDashboard] Failed to fetch properties:", err);
+      showToast("Failed to fetch properties: " + err.message);
     },
-    refetchOnWindowFocus: true,
+    retry: 1,
+    staleTime: 0,
   });
 
   // Fetch dashboard data using React Query
@@ -158,12 +178,17 @@ const LandlordDashboard = () => {
     queryFn: () => fetchDashboardData(token),
     enabled: !!user && !!user._id && !!token,
     onSuccess: (data) => {
-      console.log("[LandlordDashboard] Dashboard data updated:", data);
+      console.log(
+        "[LandlordDashboard] Dashboard data fetched successfully:",
+        data
+      );
     },
     onError: (err) => {
       console.error("[LandlordDashboard] Failed to fetch dashboard data:", err);
+      showToast("Failed to fetch dashboard data: " + err.message);
     },
-    refetchOnWindowFocus: true,
+    retry: 1,
+    staleTime: 0,
   });
 
   // Additional data for dashboard (leases, transactions, notifications)
@@ -197,7 +222,10 @@ const LandlordDashboard = () => {
       setTransactions(transactionsResponse.data || []);
       setNotifications(notificationsResponse.data || []);
     } catch (error) {
-      console.error(error);
+      console.error(
+        "[LandlordDashboard] Failed to load additional data:",
+        error
+      );
       if (error.message.includes("401")) {
         localStorage.removeItem("token");
         showToast("Session expired. Please log in again.");
@@ -224,15 +252,21 @@ const LandlordDashboard = () => {
     }
   }, [isDashboardLoading, loadAdditionalData]);
 
-  // Function to invalidate and refetch properties
-  const invalidateProperties = useCallback(async () => {
-    console.log("[LandlordDashboard] Invalidating properties query...");
-    await queryClient.invalidateQueries(["properties", user?._id], {
-      exact: true,
-    });
-    await refetchProperties();
-    console.log("[LandlordDashboard] Properties refetched after invalidation.");
-  }, [queryClient, user?._id, refetchProperties]);
+  // Function to invalidate and refetch queries
+  const invalidateQueries = useCallback(async () => {
+    console.log(
+      "[LandlordDashboard] Invalidating queries for user:",
+      user?._id
+    );
+    await Promise.all([
+      queryClient.invalidateQueries(["properties", user?._id], { exact: true }),
+      queryClient.invalidateQueries(["dashboardData", user?._id], {
+        exact: true,
+      }),
+    ]);
+    await Promise.all([refetchProperties(), refetchDashboardData()]);
+    console.log("[LandlordDashboard] Queries refetched after invalidation.");
+  }, [queryClient, user?._id, refetchProperties, refetchDashboardData]);
 
   // Persist sidebar state in localStorage
   useEffect(() => {
@@ -348,7 +382,7 @@ const LandlordDashboard = () => {
             <p className={darkMode ? "text-red-400" : "text-red-500"}>
               Error fetching properties: {propertiesError.message}
             </p>
-            <Button variant="primary" onClick={() => window.location.reload()}>
+            <Button variant="primary" onClick={() => refetchProperties()}>
               Retry
             </Button>
           </div>
@@ -370,8 +404,7 @@ const LandlordDashboard = () => {
           setIsOpen={setIsSidebarOpen}
           user={null}
           isLoading={false}
-          menuItems={menuItems}
-          managementItems={managementItems}
+          menuItems={managementItems}
         />
         <div className="flex-1 p-6 overflow-auto">
           <div className="flex flex-col items-center justify-center h-full space-y-4">
@@ -380,7 +413,7 @@ const LandlordDashboard = () => {
                 additionalError ||
                 "Error fetching dashboard data"}
             </p>
-            <Button variant="primary" onClick={() => window.location.reload()}>
+            <Button variant="primary" onClick={() => refetchDashboardData()}>
               Retry
             </Button>
           </div>
@@ -658,7 +691,7 @@ const LandlordDashboard = () => {
             user: formattedUser,
             properties,
             isLoading: isPropertiesLoading,
-            invalidateProperties,
+            invalidateProperties: invalidateQueries,
             refetchProperties,
             dashboardData,
             refetchDashboardData,

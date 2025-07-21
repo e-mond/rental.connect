@@ -1,13 +1,10 @@
-// Provides user authentication context and handles token validation, login, and logout
-
-import { createContext, useState, useEffect } from "react";
+import { createContext, useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import PropTypes from "prop-types";
 import { toast } from "react-toastify";
 import { BASE_URL } from "../config";
 import { jwtDecode } from "jwt-decode";
 
-// Create the UserContext to share user state across the app
 const UserContext = createContext({
   user: null,
   setUser: () => {},
@@ -17,7 +14,6 @@ const UserContext = createContext({
   logout: () => {},
 });
 
-// Rate-limit toast notifications to avoid spamming the user
 const toastId = "auth-error";
 const showToast = (message) => {
   if (!toast.isActive(toastId)) {
@@ -29,49 +25,28 @@ const showToast = (message) => {
   }
 };
 
-/**
- * UserProvider component to manage user state and authentication.
- * Provides user context to the app, including user data, loading state, and authentication functions.
- * @param {Object} props - Component props
- * @param {React.ReactNode} props.children - Child components to render within the provider
- */
 const UserProvider = ({ children }) => {
-  // State for the current user and loading status
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  /**
-   * Validates the JWT token by checking expiration and making a server request to /api/auth/welcome.
-   * @returns {Promise<Object>} - Result of the token validation
-   */
-  const validateToken = async () => {
+  const validateToken = useCallback(async () => {
     const token = localStorage.getItem("token")?.trim();
-    // Check if token exists in localStorage
     if (!token) {
-      if (import.meta.env.MODE !== "production") {
-        console.log("[UserProvider] No token found in localStorage");
-      }
+      console.log("[UserProvider] No token found in localStorage");
       return { success: false, data: null, error: "No token found" };
     }
 
     try {
-      // Check token expiration client-side
       const decoded = jwtDecode(token);
       const expirationDate = new Date(decoded.exp * 1000);
       if (expirationDate <= new Date()) {
-        if (import.meta.env.MODE !== "production") {
-          console.log("[UserProvider] Token expired:", decoded);
-        }
+        console.log("[UserProvider] Token expired:", decoded);
+        localStorage.removeItem("token");
         return { success: false, data: null, error: "Token expired" };
       }
 
-      if (import.meta.env.MODE !== "production") {
-        console.log("[UserProvider] Token payload:", decoded);
-      }
-
-      // Validate token with the server by calling /api/auth/welcome
-      const response = await fetch(`${BASE_URL}/api/auth/welcome`, {
+      const response = await fetch(`${BASE_URL}/api/users/me`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -79,90 +54,119 @@ const UserProvider = ({ children }) => {
         },
       });
 
-      // Log the raw response status and headers for debugging
-      if (import.meta.env.MODE !== "production") {
-        console.log("[UserProvider] Raw response status:", response.status);
-        console.log("[UserProvider] Response headers:", [
-          ...response.headers.entries(),
-        ]);
-      }
-
-      // Handle failed validation (e.g., 401, 404)
       if (!response.ok) {
-        const responseText = await response.text();
-        if (import.meta.env.MODE !== "production") {
-          console.log(
-            "[UserProvider] Token validation failed with status:",
-            response.status,
-            "Response:",
-            responseText
-          );
+        let errorMessage = `User fetch failed, status: ${response.status}`;
+        try {
+          const errorData = await response.clone().json();
+          errorMessage = errorData.message || errorMessage;
+        } catch {
+          const text = await response.text();
+          errorMessage = text || errorMessage;
         }
-        return {
-          success: false,
-          data: null,
-          error: `Token validation failed, status: ${response.status}`,
-        };
+
+        if (response.status === 400 || response.status === 401) {
+          localStorage.removeItem("token");
+          showToast("Authentication failed. Please log in again.");
+          navigate("/signin");
+        } else if (response.status === 404) {
+          localStorage.removeItem("token");
+          showToast("User not found. Please register or log in again.");
+          navigate("/signin");
+        } else {
+          showToast("Failed to fetch user data. Please try again.");
+        }
+
+        return { success: false, data: null, error: errorMessage };
       }
 
-      // Parse the response and map it to the user state format
       const data = await response.json();
       return {
         success: true,
         data: {
-          userId: data.userId || "",
-          username: data.username || "",
+          userId: data.id || "",
+          customId: data.customId || "",
+          username: data.email || "",
           role: data.role || "",
           firstName: data.firstName || "",
           lastName: data.lastName || "",
-          fullName:
-            data.fullName ||
-            `${data.firstName || ""} ${data.lastName || ""}`.trim() ||
-            "",
+          fullName: data.fullName || "",
+          phone: data.phoneNumber || "",
+          profilePic: data.profilePic || "",
         },
       };
     } catch (error) {
-      if (import.meta.env.MODE !== "production") {
-        console.error(
-          "[UserProvider] Error during token validation INTEGRAL:",
-          error
-        );
-      }
+      console.error("[UserProvider] Error during user fetch:", error.message);
+      localStorage.removeItem("token");
+      showToast("Authentication failed. Please try again.");
+      navigate("/signin");
       return { success: false, data: null, error: error.message };
+    }
+  }, [navigate]);
+
+  const login = async (token, expectedRole, isPostSignup = false) => {
+    if (!token) {
+      showToast("Invalid token. Please log in again.");
+      navigate("/signin");
+      return;
+    }
+
+    localStorage.setItem("token", token.trim());
+
+    let actualRole = expectedRole;
+    try {
+      const decoded = jwtDecode(token);
+      actualRole = decoded.role || expectedRole;
+    } catch (err) {
+      console.warn("[UserProvider] Failed to decode token for role:", err.message);
+    }
+
+    const response = await validateToken();
+    if (response.success) {
+      setUser(response.data);
+
+      const userRole = response.data.role?.toUpperCase();
+      const expected = actualRole?.toUpperCase();
+
+      console.log(`[UserProvider] User role (from token): ${userRole}, Expected role: ${expected}`);
+
+      if (expected && userRole !== expected) {
+        localStorage.removeItem("token");
+        setUser(null);
+        showToast("Role mismatch. Please log in with the correct role.");
+        navigate(expected === "LANDLORD" ? "/landlordlogin" : "/tenantlogin");
+        return;
+      }
+
+      // Only redirect to dashboard for regular logins, not post-signup
+      if (!isPostSignup) {
+        if (userRole === "LANDLORD") {
+          navigate("/dashboard/landlord", { replace: true });
+        } else if (userRole === "TENANT") {
+          navigate("/dashboard/tenant", { replace: true });
+        } else {
+          console.log("[UserProvider] Invalid user role");
+          localStorage.removeItem("token");
+          setUser(null);
+          showToast("Invalid user role");
+          navigate("/signin");
+        }
+      }
+      // For post-signup, do not navigate; let the Signup component handle it
+    } else {
+      localStorage.removeItem("token");
+      setUser(null);
+      showToast(response.error || "Authentication failed. Please try again.");
+      navigate(expectedRole === "LANDLORD" ? "/landlordlogin" : "/tenantlogin");
     }
   };
 
-  /**
-   * Logs the user in by storing the token in localStorage and validating it.
-   * Updates the user state if the token is valid, otherwise logs the user out.
-   * @param {string} token - The JWT token received from the server
-   */
-  const login = (token) => {
-    localStorage.setItem("token", token?.trim());
-    validateToken().then((response) => {
-      if (response.success) {
-        setUser(response.data);
-      } else {
-        localStorage.removeItem("token");
-        setUser(null);
-        showToast("Authentication failed. Please log in again.");
-        navigate("/landlordlogin");
-      }
-    });
-  };
-
-  /**
-   * Logs the user out by clearing the token and user state.
-   * Redirects to the login page.
-   */
   const logout = () => {
     localStorage.removeItem("token");
     setUser(null);
-    showToast("You have been logged out.");
-    navigate("/landlordlogin");
+    showToast("Logged out successfully.");
+    navigate("/signin");
   };
 
-  // Initialize user state on mount by validating any existing token
   useEffect(() => {
     const initializeUser = async () => {
       const token = localStorage.getItem("token");
@@ -173,32 +177,21 @@ const UserProvider = ({ children }) => {
         } else {
           localStorage.removeItem("token");
           setUser(null);
-          if (
-            response.error.includes("Token expired") ||
-            response.error.includes("401")
-          ) {
+          if (response.error.includes("expired")) {
             showToast("Session expired. Please log in again.");
-            navigate("/landlordlogin");
-          } else if (response.error.includes("No token found")) {
-            // Skip toast for initial load with no token
-          } else {
+          } else if (response.error.includes("User not found")) {
+            showToast("User not found. Please register or log in again.");
+          } else if (!response.error.includes("No token")) {
             showToast("Authentication failed. Please log in again.");
-            navigate("/landlordlogin");
           }
-          if (import.meta.env.MODE !== "production") {
-            console.log(
-              "[UserProvider] Token validation failed on init:",
-              response.error
-            );
-          }
+          navigate("/signin");
         }
       }
       setLoading(false);
     };
     initializeUser();
-  }, [navigate]);
+  }, [navigate, validateToken]);
 
-  // Provide the user context to children components
   return (
     <UserContext.Provider
       value={{ user, setUser, loading, validateToken, login, logout }}
@@ -208,7 +201,6 @@ const UserProvider = ({ children }) => {
   );
 };
 
-// PropTypes validation for the children prop
 UserProvider.propTypes = {
   children: PropTypes.node.isRequired,
 };

@@ -7,73 +7,52 @@ import {
   FaEllipsisV,
   FaDownload,
 } from "react-icons/fa";
-import { FiChevronUp, FiChevronDown } from "react-icons/fi"; // For sorting indicators
+import { FiChevronUp, FiChevronDown } from "react-icons/fi";
 import { toast } from "react-toastify";
 import GlobalSkeleton from "../../../../components/GlobalSkeleton";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
 import Button from "../../../../components/Button";
 import { useDarkMode } from "../../../../context/DarkModeContext";
-import landlordApi from "../../../../api/landlordApi";
+import landlordApi from "../../../../api/landlord/landlordApi";
 
-// Conversion rates (approximate as of April 2025)
-const conversionRates = {
-  "GH₵": 1, // Base currency
-  USD: 0.064, // 1 GH₵ = 0.064 USD
-  EUR: 0.058, // 1 GH₵ = 0.058 EUR
-};
+// Conversion rates for currency conversion
+const conversionRates = { "GH₵": 1, USD: 0.064, EUR: 0.058 };
 
-// Convert price from GH₵ to the selected currency
 const convertPrice = (priceInCedis, targetCurrency) => {
+  // Converting price from Cedis to target currency
   const price = parseFloat(priceInCedis);
   if (isNaN(price)) return "0.00";
-  const convertedPrice = price * conversionRates[targetCurrency];
-  return convertedPrice.toLocaleString(undefined, {
+  return (price * conversionRates[targetCurrency]).toLocaleString(undefined, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   });
 };
 
-/**
- * Payments Component for Landlord
- *
- * Displays a list of payments for the landlord, with summary cards for total collected, pending, and overdue payments.
- * Includes a search bar, filter tabs (All, Pending, Completed, Overdue), and a table of payments.
- * Fetches payment data using react-query for better state management and caching.
- * Features:
- * - Skeleton loader with a minimum 2-second display for UX consistency.
- * - Responsive design: Stacks cards vertically on mobile, makes the table scrollable.
- * - Search functionality to filter payments by name or apartment.
- * - Sorting options for the table (by date or amount).
- * - Currency conversion between GH₵, USD, and EUR.
- * - Modal for recording new payments.
- * - Edit payment functionality via a modal.
- * - Download receipt for completed payments.
- * - Export payments to CSV.
- * - Consistent error handling with ErrorDisplay and toast notifications.
- */
 const Payments = () => {
   const { darkMode } = useDarkMode();
   const [filter, setFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortConfig, setSortConfig] = useState({
-    field: "date",
+    field: "paymentDate",
     order: "desc",
   });
   const [loading, setLoading] = useState(true);
   const [dropdownOpen, setDropdownOpen] = useState({});
   const [currency, setCurrency] = useState("GH₵");
   const [modalOpen, setModalOpen] = useState(false);
-  const [modalType, setModalType] = useState("record"); // "record" or "edit"
+  const [modalType, setModalType] = useState("record");
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [formData, setFormData] = useState({
     name: "",
     apt: "",
     amount: "",
-    date: "",
+    tenantId: "",
+    leaseId: "",
     status: "Pending",
+    paymentMethod: "Bank Transfer",
+    notes: "",
   });
 
-  // Fetch payments using react-query
   const {
     data: payments = [],
     error,
@@ -83,17 +62,13 @@ const Payments = () => {
     queryKey: ["landlordPayments"],
     queryFn: () => landlordApi.fetchPayments(localStorage.getItem("token")),
     enabled: !!localStorage.getItem("token"),
-    onError: (error) => {
-      console.error("[Payments] Fetch payments error:", error);
-    },
     retry: 1,
     retryDelay: 2000,
-    staleTime: 10 * 60 * 1000, // 10 minutes
-    cacheTime: 15 * 60 * 1000, // 15 minutes
-    refetchOnWindowFocus: false, // Prevent bounces
+    staleTime: 10 * 60 * 1000,
+    cacheTime: 15 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
-  // Fetch properties to populate dropdowns in the modal
   const {
     data: properties = [],
     error: propertiesError,
@@ -102,9 +77,6 @@ const Payments = () => {
     queryKey: ["landlordProperties"],
     queryFn: () => landlordApi.fetchProperties(localStorage.getItem("token")),
     enabled: !!localStorage.getItem("token"),
-    onError: (error) => {
-      console.error("[Payments] Fetch properties error:", error);
-    },
     retry: 1,
     retryDelay: 2000,
     staleTime: 10 * 60 * 1000,
@@ -112,7 +84,6 @@ const Payments = () => {
     refetchOnWindowFocus: false,
   });
 
-  // Mutation to record a new payment
   const recordPaymentMutation = useMutation({
     mutationFn: (paymentData) =>
       landlordApi.recordPayment(localStorage.getItem("token"), paymentData),
@@ -121,12 +92,9 @@ const Payments = () => {
       refetch();
       closeModal();
     },
-    onError: (err) => {
-      toast.error(`Failed to record payment: ${err.message}`);
-    },
+    onError: (err) => toast.error(`Failed to record payment: ${err.message}`),
   });
 
-  // Mutation to update a payment
   const updatePaymentMutation = useMutation({
     mutationFn: ({ paymentId, paymentData }) =>
       landlordApi.updatePayment(
@@ -139,12 +107,9 @@ const Payments = () => {
       refetch();
       closeModal();
     },
-    onError: (err) => {
-      toast.error(`Failed to update payment: ${err.message}`);
-    },
+    onError: (err) => toast.error(`Failed to update payment: ${err.message}`),
   });
 
-  // Delete payment mutation
   const deletePaymentMutation = useMutation({
     mutationFn: (paymentId) =>
       landlordApi.deletePayment(localStorage.getItem("token"), paymentId),
@@ -152,196 +117,205 @@ const Payments = () => {
       toast.success("Payment deleted successfully!");
       refetch();
     },
-    onError: (err) => {
-      toast.error(`Failed to delete payment: ${err.message}`);
-    },
+    onError: (err) => toast.error(`Failed to delete payment: ${err.message}`),
   });
 
-  // Ensure minimum 2-second loading for UX consistency
   useEffect(() => {
+    // Setting loading state with a delay after data is fetched
     if (!paymentsLoading && !propertiesLoading) {
       const timer = setTimeout(() => setLoading(false), 2000);
       return () => clearTimeout(timer);
     }
   }, [paymentsLoading, propertiesLoading]);
 
-  // Memoized filtered and sorted payments with currency conversion
   const filteredPayments = useMemo(() => {
+    // Filtering and sorting payments based on user input
     let result = [...payments].map((payment) => ({
       ...payment,
-      amountInCedis: payment.amount || 0, // Store original amount in GH₵
-      amount: parseFloat(convertPrice(payment.amount || 0, currency)), // Convert for display
+      amountInCedis: payment.amount || 0,
+      amount: parseFloat(convertPrice(payment.amount || 0, currency)),
     }));
-
-    // Apply filter by status
-    if (filter !== "All") {
+    if (filter !== "All")
       result = result.filter((payment) => payment.status === filter);
-    }
-
-    // Apply search query (case-insensitive search by name or apartment)
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
+    if (searchQuery)
       result = result.filter(
         (payment) =>
-          (payment.name?.toLowerCase() || "").includes(query) ||
-          (payment.apt?.toLowerCase() || "").includes(query)
+          (payment.name?.toLowerCase() || "").includes(
+            searchQuery.toLowerCase()
+          ) ||
+          (payment.apt?.toLowerCase() || "").includes(searchQuery.toLowerCase())
       );
-    }
-
-    // Apply sorting
-    if (sortConfig.field) {
+    if (sortConfig.field)
       result.sort((a, b) => {
-        let aValue = a[sortConfig.field];
-        let bValue = b[sortConfig.field];
-
-        if (sortConfig.field === "date") {
+        let aValue = a[sortConfig.field],
+          bValue = b[sortConfig.field];
+        if (sortConfig.field === "paymentDate") {
           aValue = new Date(aValue);
           bValue = new Date(bValue);
         }
-
-        if (aValue < bValue) return sortConfig.order === "asc" ? -1 : 1;
-        if (aValue > bValue) return sortConfig.order === "asc" ? 1 : -1;
-        return 0;
+        return aValue < bValue
+          ? sortConfig.order === "asc"
+            ? -1
+            : 1
+          : aValue > bValue
+          ? sortConfig.order === "asc"
+            ? 1
+            : -1
+          : 0;
       });
-    }
-
     return result;
   }, [payments, filter, searchQuery, sortConfig, currency]);
 
-  // Calculate totals for summary cards (in selected currency)
   const totalCollected = payments
-    .filter((payment) => payment.status === "Completed")
-    .reduce((sum, payment) => sum + (payment.amount || 0), 0);
-
+    .filter((p) => p.status === "Completed")
+    .reduce((sum, p) => sum + (p.amount || 0), 0);
   const totalPending = payments
-    .filter((payment) => payment.status === "Pending")
-    .reduce((sum, payment) => sum + (payment.amount || 0), 0);
-
+    .filter((p) => p.status === "Pending")
+    .reduce((sum, p) => sum + (p.amount || 0), 0);
   const totalOverdue = payments
-    .filter((payment) => payment.status === "Overdue")
-    .reduce((sum, payment) => sum + (payment.amount || 0), 0);
+    .filter((p) => p.status === "Overdue")
+    .reduce((sum, p) => sum + (p.amount || 0), 0);
 
-  const handleSort = (field) => {
+  const handleSort = (field) =>
     setSortConfig((prev) => ({
       field,
       order: prev.field === field && prev.order === "asc" ? "desc" : "asc",
     }));
-  };
-
-  const toggleDropdown = (paymentId) => {
-    setDropdownOpen((prev) => ({
-      ...prev,
-      [paymentId]: !prev[paymentId],
-    }));
-  };
-
+  const toggleDropdown = (paymentId) =>
+    setDropdownOpen((prev) => ({ ...prev, [paymentId]: !prev[paymentId] }));
   const openRecordModal = () => {
     setModalType("record");
     setFormData({
       name: "",
       apt: "",
       amount: "",
-      date: new Date().toISOString().split("T")[0], // Default to today
+      tenantId: "",
+      leaseId: "",
       status: "Pending",
+      paymentMethod: "Bank Transfer",
+      notes: "",
     });
     setSelectedPayment(null);
     setModalOpen(true);
   };
-
   const openEditModal = (payment) => {
     setModalType("edit");
     setFormData({
       name: payment.name || "",
       apt: payment.apt || "",
       amount: payment.amountInCedis || "",
-      date: payment.date
-        ? new Date(payment.date).toISOString().split("T")[0]
-        : "",
+      tenantId: payment.tenantId || "",
+      leaseId: payment.leaseId || "",
       status: payment.status || "Pending",
+      paymentMethod: payment.paymentMethod || "Bank Transfer",
+      notes: payment.notes || "",
     });
     setSelectedPayment(payment);
     setModalOpen(true);
   };
-
   const closeModal = () => {
     setModalOpen(false);
     setFormData({
       name: "",
       apt: "",
       amount: "",
-      date: "",
+      tenantId: "",
+      leaseId: "",
       status: "Pending",
+      paymentMethod: "Bank Transfer",
+      notes: "",
     });
     setSelectedPayment(null);
   };
-
-  const handleFormChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
+  const handleFormChange = (e) =>
+    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   const handleRecordPayment = () => {
-    const { name, apt, amount, date, status } = formData;
-    if (!name || !apt || !amount || !date || !status) {
+    // Validating and recording a new payment
+    if (
+      !formData.name ||
+      !formData.apt ||
+      !formData.amount ||
+      !formData.tenantId ||
+      !formData.leaseId ||
+      !formData.status ||
+      !formData.paymentMethod
+    ) {
       toast.error("All fields are required.");
       return;
     }
-    if (isNaN(amount) || amount <= 0) {
+    if (isNaN(formData.amount) || formData.amount <= 0) {
       toast.error("Amount must be a positive number.");
       return;
     }
-
-    recordPaymentMutation.mutate({
-      name,
-      apt,
-      amount: parseFloat(amount),
-      date,
-      status,
+    const paymentData = {
+      ...formData,
+      amount: parseFloat(formData.amount),
+      date: new Date().toISOString(),
+    };
+    recordPaymentMutation.mutate(paymentData);
+    landlordApi.sendNotification(localStorage.getItem("token"), {
+      recipientId: formData.tenantId,
+      message: `Payment of ${formData.amount} recorded for ${formData.apt} via ${formData.paymentMethod}`,
     });
   };
-
   const handleEditPayment = () => {
-    const { name, apt, amount, date, status } = formData;
-    if (!name || !apt || !amount || !date || !status) {
+    // Validating and updating an existing payment
+    if (
+      !formData.name ||
+      !formData.apt ||
+      !formData.amount ||
+      !formData.tenantId ||
+      !formData.leaseId ||
+      !formData.status ||
+      !formData.paymentMethod
+    ) {
       toast.error("All fields are required.");
       return;
     }
-    if (isNaN(amount) || amount <= 0) {
+    if (isNaN(formData.amount) || formData.amount <= 0) {
       toast.error("Amount must be a positive number.");
       return;
     }
-
+    const paymentData = {
+      ...formData,
+      amount: parseFloat(formData.amount),
+      date: selectedPayment.paymentDate || new Date().toISOString(),
+    };
     updatePaymentMutation.mutate({
       paymentId: selectedPayment.id,
-      paymentData: {
-        name,
-        apt,
-        amount: parseFloat(amount),
-        date,
-        status,
-      },
+      paymentData,
+    });
+    landlordApi.sendNotification(localStorage.getItem("token"), {
+      recipientId: formData.tenantId,
+      message: `Payment for ${formData.apt} updated to ${formData.status} via ${formData.paymentMethod}`,
     });
   };
-
-  const handleDownloadReceipt = (payment) => {
-    console.log("Downloading receipt for payment:", payment);
-    // TODO: Implement receipt download (e.g., generate PDF or fetch from API)
-  };
-
   const handleExportPayments = () => {
+    // Exporting payments data to CSV
     const csvContent = [
-      ["Name", "Apartment", "Amount", "Date", "Status"],
-      ...filteredPayments.map((payment) => [
-        payment.name || "Unknown",
-        payment.apt || "Unknown",
-        `${currency}${payment.amount.toLocaleString()}`,
-        payment.date ? new Date(payment.date).toLocaleDateString() : "Unknown",
-        payment.status || "Unknown",
+      [
+        "Name",
+        "Apartment",
+        "Amount",
+        "Date",
+        "Status",
+        "Payment Method",
+        "Notes",
+      ],
+      ...filteredPayments.map((p) => [
+        p.name || "Unknown",
+        p.apt || "Unknown",
+        `${currency}${p.amount.toLocaleString()}`,
+        p.paymentDate
+          ? new Date(p.paymentDate).toLocaleDateString()
+          : "Unknown",
+        p.status || "Unknown",
+        p.paymentMethod || "Unknown",
+        p.notes || "",
       ]),
     ]
       .map((row) => row.join(","))
       .join("\n");
-
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
@@ -351,10 +325,9 @@ const Payments = () => {
     URL.revokeObjectURL(url);
   };
 
-  // Combine errors for display
   const combinedError = error || propertiesError;
 
-  if (loading) {
+  if (loading)
     return (
       <div className="flex h-screen">
         <div className="p-6 w-full">
@@ -366,9 +339,7 @@ const Payments = () => {
         </div>
       </div>
     );
-  }
-
-  if (combinedError) {
+  if (combinedError)
     return (
       <div className="flex h-screen">
         <div className="p-6 w-full">
@@ -391,7 +362,6 @@ const Payments = () => {
         </div>
       </div>
     );
-  }
 
   return (
     <div
@@ -400,7 +370,6 @@ const Payments = () => {
       }`}
     >
       <div className="p-4 sm:p-6 w-full overflow-auto">
-        {/* Breadcrumb Navigation */}
         <nav
           className={`mb-4 text-sm sm:text-base ${
             darkMode ? "text-gray-400" : "text-gray-500"
@@ -414,8 +383,6 @@ const Payments = () => {
             Dashboard
           </span>
         </nav>
-
-        {/* Header Section */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 space-y-4 sm:space-y-0">
           <h2 className="text-xl sm:text-2xl font-bold">Payments</h2>
           <div className="flex items-center space-x-3">
@@ -435,8 +402,6 @@ const Payments = () => {
             </Button>
           </div>
         </div>
-
-        {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
           <div
             className={`p-4 rounded-lg shadow flex items-center ${
@@ -523,8 +488,6 @@ const Payments = () => {
             </div>
           </div>
         </div>
-
-        {/* Search Bar and Currency Selector */}
         <div className="flex flex-col sm:flex-row items-center gap-4 mb-4">
           <div
             className={`flex items-center border p-2 rounded-lg shadow-sm flex-1 ${
@@ -562,8 +525,6 @@ const Payments = () => {
             <option value="EUR">EUR (Euro)</option>
           </select>
         </div>
-
-        {/* Filter Tabs */}
         <div
           className={`flex space-x-2 sm:space-x-4 text-sm border-b pb-2 mb-4 overflow-x-auto scrollbar-thin ${
             darkMode
@@ -593,8 +554,6 @@ const Payments = () => {
             </span>
           ))}
         </div>
-
-        {/* Payments Table */}
         <div
           className={`rounded-lg shadow p-4 overflow-x-auto ${
             darkMode
@@ -640,11 +599,11 @@ const Payments = () => {
                 </th>
                 <th
                   className="p-3 cursor-pointer text-sm sm:text-base"
-                  onClick={() => handleSort("date")}
+                  onClick={() => handleSort("paymentDate")}
                 >
                   <div className="flex items-center gap-1">
                     Date
-                    {sortConfig.field === "date" &&
+                    {sortConfig.field === "paymentDate" &&
                       (sortConfig.order === "asc" ? (
                         <FiChevronUp />
                       ) : (
@@ -653,6 +612,7 @@ const Payments = () => {
                   </div>
                 </th>
                 <th className="p-3 text-sm sm:text-base">Status</th>
+                <th className="p-3 text-sm sm:text-base">Method</th>
                 <th className="p-3 text-sm sm:text-base">Actions</th>
               </tr>
             </thead>
@@ -689,12 +649,15 @@ const Payments = () => {
                     {payment.amount.toLocaleString()}
                   </td>
                   <td className="p-3 text-sm sm:text-base">
-                    {payment.date
-                      ? new Date(payment.date).toLocaleDateString()
+                    {payment.paymentDate
+                      ? new Date(payment.paymentDate).toLocaleDateString()
                       : "Unknown"}
                   </td>
                   <td className="p-3 text-sm sm:text-base">
                     {payment.status || "Unknown"}
+                  </td>
+                  <td className="p-3 text-sm sm:text-base">
+                    {payment.paymentMethod || "Unknown"}
                   </td>
                   <td className="p-3 relative">
                     <div className="flex space-x-2">
@@ -734,15 +697,6 @@ const Payments = () => {
                             >
                               Edit
                             </Button>
-                            {payment.status === "Completed" && (
-                              <Button
-                                variant="secondary"
-                                className="block w-full text-left px-4 py-2 text-sm"
-                                onClick={() => handleDownloadReceipt(payment)}
-                              >
-                                Download Receipt
-                              </Button>
-                            )}
                             <Button
                               variant="secondary"
                               className={`block w-full text-left px-4 py-2 text-sm ${
@@ -777,8 +731,6 @@ const Payments = () => {
             </p>
           )}
         </div>
-
-        {/* Modal for Recording/Editing Payments */}
         {modalOpen && (
           <div
             className={`fixed inset-0 flex items-center justify-center z-50 ${
@@ -868,22 +820,44 @@ const Payments = () => {
                 </div>
                 <div>
                   <label
-                    htmlFor="date"
+                    htmlFor="tenantId"
                     className="block text-sm font-medium mb-1"
                   >
-                    Date
+                    Tenant ID
                   </label>
                   <input
-                    type="date"
-                    id="date"
-                    name="date"
-                    value={formData.date}
+                    type="text"
+                    id="tenantId"
+                    name="tenantId"
+                    value={formData.tenantId}
                     onChange={handleFormChange}
                     className={`w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                       darkMode
                         ? "border-gray-600 bg-gray-700 text-gray-200"
                         : "border-gray-300 bg-white text-gray-800"
                     }`}
+                    placeholder="Enter tenant ID"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="leaseId"
+                    className="block text-sm font-medium mb-1"
+                  >
+                    Lease ID
+                  </label>
+                  <input
+                    type="text"
+                    id="leaseId"
+                    name="leaseId"
+                    value={formData.leaseId}
+                    onChange={handleFormChange}
+                    className={`w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      darkMode
+                        ? "border-gray-600 bg-gray-700 text-gray-200"
+                        : "border-gray-300 bg-white text-gray-800"
+                    }`}
+                    placeholder="Enter lease ID"
                   />
                 </div>
                 <div>
@@ -908,6 +882,51 @@ const Payments = () => {
                     <option value="Completed">Completed</option>
                     <option value="Overdue">Overdue</option>
                   </select>
+                </div>
+                <div>
+                  <label
+                    htmlFor="paymentMethod"
+                    className="block text-sm font-medium mb-1"
+                  >
+                    Payment Method
+                  </label>
+                  <select
+                    id="paymentMethod"
+                    name="paymentMethod"
+                    value={formData.paymentMethod}
+                    onChange={handleFormChange}
+                    className={`w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      darkMode
+                        ? "border-gray-600 bg-gray-700 text-gray-200"
+                        : "border-gray-300 bg-white text-gray-800"
+                    }`}
+                  >
+                    <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="Mobile Money">Mobile Money</option>
+                    <option value="Cash">Cash</option>
+                    <option value="Credit Card">Credit Card</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    htmlFor="notes"
+                    className="block text-sm font-medium mb-1"
+                  >
+                    Notes
+                  </label>
+                  <textarea
+                    id="notes"
+                    name="notes"
+                    value={formData.notes}
+                    onChange={handleFormChange}
+                    className={`w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      darkMode
+                        ? "border-gray-600 bg-gray-700 text-gray-200"
+                        : "border-gray-300 bg-white text-gray-800"
+                    }`}
+                    placeholder="Enter any additional notes"
+                    rows="3"
+                  />
                 </div>
               </div>
               <div className="flex justify-end space-x-3 mt-6">
